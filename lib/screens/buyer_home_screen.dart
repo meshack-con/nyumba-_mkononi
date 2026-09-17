@@ -242,9 +242,9 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
               ),
               _bottomItem(
                 index: 3,
-                icon: Icons.calendar_month_outlined,
-                activeIcon: Icons.calendar_month_rounded,
-                label: 'Ziara',
+                icon: Icons.support_agent_outlined,
+                activeIcon: Icons.support_agent_rounded,
+                label: 'Msaada',
               ),
               _bottomItem(
                 index: 4,
