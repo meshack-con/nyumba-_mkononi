@@ -198,10 +198,77 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
         content = _buildHome();
     }
 
+    final width = MediaQuery.sizeOf(context).width;
+    final useRail = width >= 850;
+
+    if (useRail) {
+      return Scaffold(
+        backgroundColor: _page,
+        body: Row(
+          children: [
+            _navigationRail(),
+            const VerticalDivider(width: 1),
+            Expanded(child: content),
+          ],
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: _page,
       body: content,
       bottomNavigationBar: _bottomNavigation(),
+    );
+  }
+
+  Widget _navigationRail() {
+    return NavigationRail(
+      selectedIndex: _tab,
+      onDestinationSelected: (index) {
+        if (!mounted) return;
+        setState(() {
+          _tab = index;
+        });
+      },
+      labelType: NavigationRailLabelType.all,
+      backgroundColor: Colors.white,
+      selectedIconTheme: const IconThemeData(color: _pink),
+      unselectedIconTheme: const IconThemeData(color: _navy),
+      selectedLabelTextStyle: const TextStyle(
+        color: _pink,
+        fontWeight: FontWeight.w800,
+        fontSize: 11,
+      ),
+      unselectedLabelTextStyle: const TextStyle(
+        color: _navy,
+        fontSize: 11,
+      ),
+      destinations: const [
+        NavigationRailDestination(
+          icon: Icon(Icons.search_rounded),
+          label: Text('Tafuta'),
+        ),
+        NavigationRailDestination(
+          icon: Icon(Icons.favorite_border_rounded),
+          selectedIcon: Icon(Icons.favorite_rounded),
+          label: Text('Pendwa'),
+        ),
+        NavigationRailDestination(
+          icon: Icon(Icons.chat_bubble_outline_rounded),
+          selectedIcon: Icon(Icons.chat_bubble_rounded),
+          label: Text('Ujumbe'),
+        ),
+        NavigationRailDestination(
+          icon: Icon(Icons.support_agent_outlined),
+          selectedIcon: Icon(Icons.support_agent_rounded),
+          label: Text('Msaada'),
+        ),
+        NavigationRailDestination(
+          icon: Icon(Icons.person_outline_rounded),
+          selectedIcon: Icon(Icons.person_rounded),
+          label: Text('Wasifu'),
+        ),
+      ],
     );
   }
 
@@ -496,110 +563,6 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
             fontWeight: FontWeight.w500,
           ),
         ),
-      ],
-    );
-  }
-
-  Widget _desktopHeroContent() {
-    return Stack(
-      children: [
-        Positioned(
-          left: 0,
-          top: 0,
-          right: 0,
-          child: Row(
-            children: [
-              _brand(),
-              const Spacer(),
-              _loginButton(),
-            ],
-          ),
-        ),
-
-        Positioned(
-          left: 0,
-          top: 68,
-          right: 0,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Tafuta nyumba, viwanja na fursa bora za makazi',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: _navy,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -0.3,
-                  height: 1.08,
-                ),
-              ),
-              const SizedBox(height: 5),
-              const Text(
-                'Nyumba Mkononi – Mahali sahihi kwa mahitaji yako ya makazi',
-                style: TextStyle(
-                  color: _muted,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        Positioned(
-          left: 0,
-          right: 0,
-          bottom: -1,
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: 1210,
-              ),
-              child: _searchPanel(),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _mobileHeroContent() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _brand(),
-            ),
-            _loginButton(),
-          ],
-        ),
-        const SizedBox(height: 17),
-        const Text(
-          'Tafuta nyumba, viwanja na fursa bora za makazi',
-          style: TextStyle(
-            color: _navy,
-            fontSize: 19,
-            fontWeight: FontWeight.w900,
-            height: 1.12,
-          ),
-        ),
-        const SizedBox(height: 4),
-        const Text(
-          'Nyumba Mkononi – Mahali sahihi kwa mahitaji yako ya makazi',
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: _muted,
-            fontSize: 11,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const Spacer(),
-        _searchPanel(),
       ],
     );
   }
