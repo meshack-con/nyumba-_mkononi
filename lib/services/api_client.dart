@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/conversation.dart';
 import '../models/message.dart';
 import '../models/property.dart';
 import '../models/property_contact.dart';
@@ -123,6 +124,17 @@ class ApiClient {
       body: jsonEncode({'content': content, if (receiverId != null) 'receiver_id': receiverId}),
     );
     return ChatMessage.fromJson(await _decode(response) as Map<String, dynamic>);
+  }
+
+  Future<List<ConversationThread>> getConversations() async {
+    final response = await http.get(Uri.parse('$apiBaseUrl/messages/conversations'), headers: await _headers(authenticated: true));
+    final data = await _decode(response) as List<dynamic>;
+    return data.map((item) => ConversationThread.fromJson(item as Map<String, dynamic>)).toList();
+  }
+
+  Future<void> deleteMessage(int messageId) async {
+    final response = await http.delete(Uri.parse('$apiBaseUrl/messages/$messageId'), headers: await _headers(authenticated: true));
+    await _decode(response);
   }
 
   Future<List<FavoriteItem>> getFavorites() async {

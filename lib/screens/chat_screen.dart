@@ -86,6 +86,29 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  Future<void> _deleteMessage(ChatMessage message) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Futa ujumbe?'),
+        content: const Text('Ujumbe huu utafutwa kabisa kwenye mfumo.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Ghairi')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Futa', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await ApiClient.instance.deleteMessage(message.id);
+      if (!mounted) return;
+      setState(() => _messages = _messages.where((m) => m.id != message.id).toList());
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Imeshindwa kufuta ujumbe')));
+    }
+  }
+
   String _formatTime(DateTime dt) {
     final local = dt.toLocal();
     final hh = local.hour.toString().padLeft(2, '0');
@@ -112,6 +135,8 @@ class _ChatScreenState extends State<ChatScreen> {
                         final isMine = message.senderId != widget.otherUserId;
                         return Align(
                           alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
+                          child: GestureDetector(
+                          onLongPress: () => _deleteMessage(message),
                           child: Container(
                             margin: const EdgeInsets.symmetric(vertical: 4),
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -131,6 +156,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                 ],
                               ]),
                             ]),
+                          ),
                           ),
                         );
                       },
