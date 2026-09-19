@@ -132,6 +132,15 @@ class ApiClient {
     return data.map((item) => ConversationThread.fromJson(item as Map<String, dynamic>)).toList();
   }
 
+  Future<int> getUnreadMessagesCount() async {
+    try {
+      final threads = await getConversations();
+      return threads.fold<int>(0, (sum, thread) => sum + thread.unreadCount);
+    } catch (_) {
+      return 0;
+    }
+  }
+
   Future<void> deleteMessage(int messageId) async {
     final response = await http.delete(Uri.parse('$apiBaseUrl/messages/$messageId'), headers: await _headers(authenticated: true));
     await _decode(response);
