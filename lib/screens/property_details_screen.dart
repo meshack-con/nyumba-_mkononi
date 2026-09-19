@@ -38,6 +38,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
       setState(() => _showContact = false);
       return;
     }
+    if (!await ensureAuthenticated(context, asSeller: false) || !mounted) return;
     setState(() {
       _loadingContact = true;
       _contactError = null;

@@ -221,14 +221,27 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     );
   }
 
+  // Tabs ambazo zinahitaji mtumiaji awe ameshaingia (auth) kabla ya
+  // kuzifikia: Pendwa (favorites zake), Ujumbe (mazungumzo yake), Wasifu
+  // (akaunti yake). Tafuta na Msaada zinabaki wazi kwa wageni.
+  static const Set<int> _authRequiredTabs = {1, 2, 4};
+
+  Future<void> _selectTab(int index) async {
+    if (_authRequiredTabs.contains(index)) {
+      final ok = await ensureAuthenticated(context, asSeller: false);
+      if (!ok || !mounted) return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _tab = index;
+    });
+  }
+
   Widget _navigationRail() {
     return NavigationRail(
       selectedIndex: _tab,
       onDestinationSelected: (index) {
-        if (!mounted) return;
-        setState(() {
-          _tab = index;
-        });
+        _selectTab(index);
       },
       labelType: NavigationRailLabelType.all,
       backgroundColor: Colors.white,
@@ -336,13 +349,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
 
     return Expanded(
       child: InkWell(
-        onTap: () {
-          if (!mounted) return;
-
-          setState(() {
-            _tab = index;
-          });
-        },
+        onTap: () => _selectTab(index),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
