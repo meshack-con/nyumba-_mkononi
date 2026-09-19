@@ -413,8 +413,10 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
 
     // The image ends before the search card. This prevents the
     // background from continuing underneath the full search/buttons area.
-    final heroHeight = desktop ? 285.0 : 300.0;
-    final imageHeight = desktop ? 215.0 : 225.0;
+    // Reduced so the search card sits closer to the header above it, and
+    // the filter chips (_categoryBar, which follows this sliver) move up too.
+    final heroHeight = desktop ? 255.0 : 270.0;
+    final imageHeight = desktop ? 195.0 : 205.0;
 
     return SizedBox(
       height: heroHeight,
@@ -480,7 +482,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
           Positioned(
             left: desktop ? 22 : 10,
             right: desktop ? 22 : 10,
-            top: desktop ? 150 : 165,
+            top: desktop ? 125 : 140,
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(
@@ -868,7 +870,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(
           22,
-          10,
+          4,
           22,
           8,
         ),
@@ -1088,11 +1090,13 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                   mainAxisSpacing: 12,
                   crossAxisSpacing: 12,
 
-                  // Increased ratio = shorter cards.
+                  // Slightly taller cards than before so the larger
+                  // photo area (see _PropertyCard image height) has
+                  // room without squeezing the name/price text.
                   childAspectRatio:
                       width < 560
-                          ? 1.15
-                          : 1.20,
+                          ? 1.00
+                          : 1.05,
                 ),
                 itemBuilder: (context, index) {
                   final property =
@@ -1524,9 +1528,10 @@ class _PropertyCard extends StatelessWidget {
             crossAxisAlignment:
                 CrossAxisAlignment.start,
             children: [
-              // Increased from 105 to 135 so the image area shows more.
+              // Image area enlarged so the photo is clearly the dominant
+              // part of the card, bigger than the name/price text below.
               SizedBox(
-                height: 165,
+                height: 195,
                 width: double.infinity,
                 child: Stack(
                   fit: StackFit.expand,
