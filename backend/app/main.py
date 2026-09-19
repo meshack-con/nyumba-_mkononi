@@ -18,6 +18,7 @@ from .database import Base, engine, get_db, settings
 from .models import Favorite, LoginEvent, Message, Property, PropertyMode, PropertyStatus, PropertyType, User, UserRole
 from .schemas import (
     AuthResponse,
+    ConversationResponse,
     FavoriteResponse,
     LoginRequest,
     MessageCreate,
@@ -312,6 +313,58 @@ def get_messages(
     return messages
 
 
+# --- Inbox ya mazungumzo (kwa mpangishaji/mnunuzi kuona ujumbe wote) ----
+# Inarudisha "threads" - kikundi kimoja kwa kila (tangazo, mtu mwingine) -
+# kikiwa na ujumbe wa mwisho na idadi ya usiosomwa. Hii ndiyo "taarifa za
+# kweli" mpangishaji anazoziona kuhusu ujumbe unaomsubiri.
+
+@app.get("/messages/conversations", response_model=list[ConversationResponse])
+def list_conversations(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    query = (
+        select(Message)
+        .options(joinedload(Message.sender), joinedload(Message.receiver), joinedload(Message.property))
+        .where(or_(Message.sender_id == current_user.id, Message.receiver_id == current_user.id))
+        .order_by(Message.created_at.asc())
+    )
+    messages = list(db.scalars(query).unique().all())
+    threads: dict[tuple[int, int], dict] = {}
+    for message in messages:
+        other = message.receiver if message.sender_id == current_user.id else message.sender
+        key = (message.property_id, other.id)
+        thread = threads.get(key)
+        if thread is None:
+            thread = {
+                "property_id": message.property_id,
+                "property_name": message.property.jina if message.property else "",
+                "other_user_id": other.id,
+                "other_user_name": other.jina_kamili,
+                "last_message": message.content,
+                "last_message_at": message.created_at,
+                "last_sender_id": message.sender_id,
+                "unread_count": 0,
+            }
+            threads[key] = thread
+        else:
+            thread["last_message"] = message.content
+            thread["last_message_at"] = message.created_at
+            thread["last_sender_id"] = message.sender_id
+        if message.receiver_id == current_user.id and message.read_at is None:
+            thread["unread_count"] += 1
+    ordered = sorted(threads.values(), key=lambda item: item["last_message_at"], reverse=True)
+    return ordered
+
+
+@app.delete("/messages/{message_id}", status_code=204)
+def delete_message(message_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    message = db.get(Message, message_id)
+    if message is None:
+        raise HTTPException(status_code=404, detail="Ujumbe haukupatikani")
+    if current_user.id not in (message.sender_id, message.receiver_id):
+        raise HTTPException(status_code=403, detail="Huna ruhusa kufuta ujumbe huu")
+    db.delete(message)
+    db.commit()
+
+
 # --- Seller-only property endpoints ------------------------------------
 # Hizi zinatumia PropertyResponse kamili (INA verification_doc_url)
 # kwa sababu ni seller mwenyewe, aliyeauthenticate, akiona taarifa zake.
@@ -378,8 +431,38 @@ def list_my_properties(
     db: Session = Depends(get_db),
 ):
     ensure_seller(current_user)
-    query = select(Property).where(Property.owner_id == current_user.id).order_by(Property.created_at.desc())
-    return list(db.scalars(query).all())
+    # Idadi ya "like" (favorites) kwa kila tangazo, na idadi ya ujumbe
+    # usiosomwa uliopokelewa na mpangishaji kwa kila tangazo - hivi
+    # ndivyo "notifications za kweli" anazoziona kwenye dashibodi yake.
+    fav_count_subq = (
+        select(Favorite.property_id, func.count(Favorite.id).label("fav_count"))
+        .group_by(Favorite.property_id)
+        .subquery()
+    )
+    unread_subq = (
+        select(Message.property_id, func.count(Message.id).label("unread_count"))
+        .where(Message.receiver_id == current_user.id, Message.read_at.is_(None))
+        .group_by(Message.property_id)
+        .subquery()
+    )
+    query = (
+        select(
+            Property,
+            func.coalesce(fav_count_subq.c.fav_count, 0),
+            func.coalesce(unread_subq.c.unread_count, 0),
+        )
+        .outerjoin(fav_count_subq, fav_count_subq.c.property_id == Property.id)
+        .outerjoin(unread_subq, unread_subq.c.property_id == Property.id)
+        .where(Property.owner_id == current_user.id)
+        .order_by(Property.created_at.desc())
+    )
+    results: list[PropertyResponse] = []
+    for property_item, fav_count, unread_count in db.execute(query).all():
+        data = PropertyResponse.model_validate(property_item).model_dump()
+        data["favorites_count"] = fav_count
+        data["unread_messages_count"] = unread_count
+        results.append(PropertyResponse(**data))
+    return results
 
 
 # --- Favorites -----------------------------------------------------------

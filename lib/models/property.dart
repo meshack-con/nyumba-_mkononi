@@ -24,6 +24,8 @@ class Property {
     this.verificationDocUrl,
     this.createdAt,
     this.expiresAt,
+    this.favoritesCount = 0,
+    this.unreadMessagesCount = 0,
   });
   final int id;
   final int ownerId;
@@ -49,6 +51,8 @@ class Property {
   final String status;
   final DateTime? createdAt;
   final DateTime? expiresAt;
+  final int favoritesCount;
+  final int unreadMessagesCount;
   factory Property.fromJson(Map<String, dynamic> json) => Property(
         id: json['id'] as int,
         ownerId: json['owner_id'] as int,
@@ -78,6 +82,8 @@ class Property {
         expiresAt: json['expires_at'] == null
             ? null
             : DateTime.tryParse(json['expires_at'] as String),
+        favoritesCount: json['favorites_count'] as int? ?? 0,
+        unreadMessagesCount: json['unread_messages_count'] as int? ?? 0,
       );
   String get formattedPrice => 'TZS ${price.toString().replaceAllMapped(
       RegExp(r'(?<!^)(?=(\d{3})+$)'),

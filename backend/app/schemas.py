@@ -63,6 +63,8 @@ class PropertyResponse(BaseModel):
     status: PropertyStatus
     created_at: datetime
     expires_at: datetime | None
+    favorites_count: int = 0
+    unread_messages_count: int = 0
 class PublicPropertyResponse(BaseModel):
     """Response ya public - HAINA verification_doc_url.
     TUMIA HII kwa endpoints zozote zinazoweza kufikiwa na buyer/umma
@@ -131,3 +133,15 @@ class MessageResponse(BaseModel):
     content: str
     created_at: datetime
     read_at: datetime | None
+class ConversationResponse(BaseModel):
+    """Kikundi cha mazungumzo (thread) kati ya mtumiaji na mtu mwingine
+    kuhusu tangazo maalum - kinatumika kwenye 'inbox' ya mpangishaji/mnunuzi
+    kuonyesha ujumbe wa hivi karibuni na idadi ya ujumbe usiosomwa."""
+    property_id: int
+    property_name: str
+    other_user_id: int
+    other_user_name: str
+    last_message: str
+    last_message_at: datetime
+    last_sender_id: int
+    unread_count: int

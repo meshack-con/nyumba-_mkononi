@@ -5,6 +5,7 @@ import '../services/api_client.dart';
 import '../theme/app_theme.dart';
 import 'add_property_screen.dart';
 import 'auth_screen.dart';
+import 'seller_messages_screen.dart';
 
 class SellerDashboardScreen extends StatefulWidget {
   const SellerDashboardScreen({super.key});
@@ -64,8 +65,34 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
 
     final approved = _properties.where((item) => item.status == 'approved').length;
     final pending = _properties.where((item) => item.status == 'pending').length;
+    final totalUnread = _properties.fold<int>(0, (sum, item) => sum + item.unreadMessagesCount);
     return Scaffold(
-      appBar: AppBar(title: const Text('Dashibodi yako', style: TextStyle(fontWeight: FontWeight.w900)), actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded))]),
+      appBar: AppBar(
+        title: const Text('Dashibodi yako', style: TextStyle(fontWeight: FontWeight.w900)),
+        actions: [
+          Stack(alignment: Alignment.center, children: [
+            IconButton(
+              onPressed: () async {
+                await Navigator.push(context, MaterialPageRoute(builder: (_) => const SellerMessagesScreen()));
+                _load();
+              },
+              icon: const Icon(Icons.chat_bubble_outline_rounded),
+            ),
+            if (totalUnread > 0)
+              Positioned(
+                right: 6,
+                top: 6,
+                child: Container(
+                  padding: const EdgeInsets.all(3),
+                  constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                  decoration: const BoxDecoration(color: AppTheme.coral, shape: BoxShape.circle),
+                  child: Text('$totalUnread', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800)),
+                ),
+              ),
+          ]),
+          IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded)),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(onPressed: _addProperty, backgroundColor: AppTheme.coral, foregroundColor: Colors.white, icon: const Icon(Icons.add_rounded), label: const Text('Weka nyumba')),
       body: RefreshIndicator(onRefresh: _load, child: ListView(padding: const EdgeInsets.fromLTRB(20, 8, 20, 100), children: [
         Text('Tangazo lako, mwanzo wa safari ya mtu.', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
@@ -74,7 +101,25 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
         const SizedBox(height: 28),
         Text('Mali zako', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
         const SizedBox(height: 12),
-        if (_loading) const Center(child: Padding(padding: EdgeInsets.all(36), child: CircularProgressIndicator())) else if (_properties.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 50), child: Column(children: [Icon(Icons.add_business_outlined, size: 48, color: AppTheme.muted), SizedBox(height: 12), Text('Bado hujaweka nyumba.', style: TextStyle(color: AppTheme.muted))])) else ..._properties.map((property) => Card(margin: const EdgeInsets.only(bottom: 12), child: ListTile(contentPadding: const EdgeInsets.all(10), leading: ClipRRect(borderRadius: BorderRadius.circular(9), child: SizedBox(width: 70, height: 70, child: property.photoUrls.isEmpty ? const ColoredBox(color: AppTheme.sand, child: Icon(Icons.home)) : Image.network(ApiClient.instance.assetUrl(property.photoUrls.first), fit: BoxFit.cover))), title: Text(property.name, style: const TextStyle(fontWeight: FontWeight.w800)), subtitle: Text('${property.locationLabel}\n${property.formattedPrice}'), isThreeLine: true, trailing: _StatusBadge(status: property.status))))
+        if (_loading) const Center(child: Padding(padding: EdgeInsets.all(36), child: CircularProgressIndicator())) else if (_properties.isEmpty) const Padding(padding: EdgeInsets.symmetric(vertical: 50), child: Column(children: [Icon(Icons.add_business_outlined, size: 48, color: AppTheme.muted), SizedBox(height: 12), Text('Bado hujaweka nyumba.', style: TextStyle(color: AppTheme.muted))])) else ..._properties.map((property) => Card(margin: const EdgeInsets.only(bottom: 12), child: ListTile(
+          contentPadding: const EdgeInsets.all(10),
+          leading: ClipRRect(borderRadius: BorderRadius.circular(9), child: SizedBox(width: 70, height: 70, child: property.photoUrls.isEmpty ? const ColoredBox(color: AppTheme.sand, child: Icon(Icons.home)) : Image.network(ApiClient.instance.assetUrl(property.photoUrls.first), fit: BoxFit.cover))),
+          title: Text(property.name, style: const TextStyle(fontWeight: FontWeight.w800)),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${property.locationLabel}\n${property.formattedPrice}'),
+              const SizedBox(height: 6),
+              Wrap(spacing: 12, runSpacing: 4, children: [
+                _MiniStat(icon: Icons.visibility_outlined, value: '${property.viewCount}'),
+                _MiniStat(icon: Icons.favorite_outline_rounded, value: '${property.favoritesCount}'),
+                if (property.unreadMessagesCount > 0) _MiniStat(icon: Icons.mark_chat_unread_outlined, value: '${property.unreadMessagesCount}', color: AppTheme.coral),
+              ]),
+            ]),
+          ),
+          isThreeLine: true,
+          trailing: _StatusBadge(status: property.status),
+        )))
       ])),
     );
   }
@@ -85,6 +130,22 @@ class _Stat extends StatelessWidget {
   final String label, value; final Color color;
   @override
   Widget build(BuildContext context) => Expanded(child: Container(padding: const EdgeInsets.all(15), decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(14)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(value, style: const TextStyle(color: Colors.white, fontSize: 25, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text(label, style: const TextStyle(color: Colors.white, fontSize: 11))])));
+}
+
+class _MiniStat extends StatelessWidget {
+  const _MiniStat({required this.icon, required this.value, this.color});
+  final IconData icon;
+  final String value;
+  final Color? color;
+  @override
+  Widget build(BuildContext context) {
+    final c = color ?? AppTheme.muted;
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Icon(icon, size: 14, color: c),
+      const SizedBox(width: 3),
+      Text(value, style: TextStyle(fontSize: 12, color: c, fontWeight: FontWeight.w700)),
+    ]);
+  }
 }
 
 class _StatusBadge extends StatelessWidget {
