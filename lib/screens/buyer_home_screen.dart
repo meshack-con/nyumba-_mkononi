@@ -1090,13 +1090,13 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                   mainAxisSpacing: 12,
                   crossAxisSpacing: 12,
 
-                  // Slightly taller cards than before so the larger
-                  // photo area (see _PropertyCard image height) has
-                  // room without squeezing the name/price text.
+                  // Card size trimmed back down (kept the photo larger
+                  // than the text below it, but the overall card is
+                  // more compact again).
                   childAspectRatio:
                       width < 560
-                          ? 1.00
-                          : 1.05,
+                          ? 1.20
+                          : 1.28,
                 ),
                 itemBuilder: (context, index) {
                   final property =
@@ -1528,10 +1528,11 @@ class _PropertyCard extends StatelessWidget {
             crossAxisAlignment:
                 CrossAxisAlignment.start,
             children: [
-              // Image area enlarged so the photo is clearly the dominant
-              // part of the card, bigger than the name/price text below.
+              // Photo area: still bigger than the name/price text below
+              // it, but smaller overall than before so the whole card
+              // is more compact.
               SizedBox(
-                height: 195,
+                height: 145,
                 width: double.infinity,
                 child: Stack(
                   fit: StackFit.expand,
