@@ -61,6 +61,7 @@ class Property(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     owner: Mapped[User] = relationship(back_populates="properties")
     favorites: Mapped[list["Favorite"]] = relationship(back_populates="property", cascade="all, delete-orphan")
+    messages: Mapped[list["Message"]] = relationship(cascade="all, delete-orphan")
 class Favorite(Base):
     __tablename__ = "favorites"
     __table_args__ = (UniqueConstraint("user_id", "property_id", name="uq_favorite_user_property"),)
@@ -85,6 +86,6 @@ class Message(Base):
     content: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    property: Mapped["Property"] = relationship()
+    property: Mapped["Property"] = relationship(back_populates="messages")
     sender: Mapped["User"] = relationship(foreign_keys=[sender_id])
     receiver: Mapped["User"] = relationship(foreign_keys=[receiver_id])

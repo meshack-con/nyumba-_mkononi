@@ -94,6 +94,22 @@ def reject_property(property_id: int, db: Session = Depends(get_db)):
     return property_item
 
 
+@router.delete("/properties/{property_id}", status_code=204)
+def delete_property(property_id: int, db: Session = Depends(get_db)):
+    """Admin anafuta tangazo la nyumba kabisa kutoka kwenye mfumo - hii ni
+    hatua ya kudumu (favorites na messages zinazohusiana zinafutika pia).
+
+    Tofauti na reject (ambayo inabaki kwenye historia ikiwa 'rejected'),
+    delete inaondoa rekodi kabisa - inafaa kwa matangazo ya udanganyifu,
+    marudio, au maombi ya moja kwa moja ya mwenye tangazo/admin kufuta."""
+    property_item = db.get(Property, property_id)
+    if property_item is None:
+        raise HTTPException(status_code=404, detail="Tangazo halipatikani")
+    db.delete(property_item)
+    db.commit()
+    return None
+
+
 # --- Analytics dashboard -------------------------------------------------
 
 @router.get("/analytics/summary", response_model=AnalyticsSummary)
