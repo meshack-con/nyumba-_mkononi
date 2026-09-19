@@ -13,3 +13,4 @@ build/
 backend/.env
 backend/venv/
 backend/uploads/
+.vercel

@@ -346,8 +346,8 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
 
     // The image ends before the search card. This prevents the
     // background from continuing underneath the full search/buttons area.
-    final heroHeight = desktop ? 285.0 : 405.0;
-    final imageHeight = desktop ? 215.0 : 285.0;
+    final heroHeight = desktop ? 285.0 : 300.0;
+    final imageHeight = desktop ? 215.0 : 225.0;
 
     return SizedBox(
       height: heroHeight,
@@ -413,7 +413,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
           Positioned(
             left: desktop ? 22 : 10,
             right: desktop ? 22 : 10,
-            top: desktop ? 150 : 205,
+            top: desktop ? 150 : 165,
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(
@@ -1128,8 +1128,8 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                   // Increased ratio = shorter cards.
                   childAspectRatio:
                       width < 560
-                          ? 1.30
-                          : 1.35,
+                          ? 1.15
+                          : 1.20,
                 ),
                 itemBuilder: (context, index) {
                   final property =
@@ -1563,7 +1563,7 @@ class _PropertyCard extends StatelessWidget {
             children: [
               // Increased from 105 to 135 so the image area shows more.
               SizedBox(
-                height: 135,
+                height: 165,
                 width: double.infinity,
                 child: Stack(
                   fit: StackFit.expand,

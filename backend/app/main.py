@@ -9,6 +9,9 @@ from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
+import cloudinary
+import cloudinary.uploader
+
 from .admin import router as admin_router
 from .auth import create_access_token, get_current_user, hash_password, verify_password
 from .database import Base, engine, get_db, settings
@@ -33,6 +36,13 @@ UPLOADS_DIR.mkdir(exist_ok=True)
 app = FastAPI(title="Nyumba Mkononi API", version="1.0.0")
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 app.include_router(admin_router)
+
+cloudinary.config(
+    cloud_name=settings.cloudinary_cloud_name,
+    api_key=settings.cloudinary_api_key,
+    api_secret=settings.cloudinary_api_secret,
+    secure=True,
+)
 
 origins = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
 app.add_middleware(
@@ -80,12 +90,15 @@ async def save_upload(upload: UploadFile, folder: str) -> str:
     allowed_extensions = {".jpg", ".jpeg", ".png", ".webp", ".pdf"}
     if extension not in allowed_extensions:
         raise HTTPException(status_code=400, detail="Aina ya file hairuhusiwi")
-    target_dir = UPLOADS_DIR / folder
-    target_dir.mkdir(exist_ok=True)
-    filename = f"{uuid4().hex}{extension}"
-    target = target_dir / filename
-    target.write_bytes(await upload.read())
-    return f"/uploads/{folder}/{filename}"
+    contents = await upload.read()
+    resource_type = "raw" if extension == ".pdf" else "image"
+    result = cloudinary.uploader.upload(
+        contents,
+        folder=f"nyumba_mkononi/{folder}",
+        resource_type=resource_type,
+        public_id=uuid4().hex,
+    )
+    return result["secure_url"]
 
 
 @app.post("/auth/register", response_model=AuthResponse, status_code=201)
