@@ -153,11 +153,17 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
   @override
   Widget build(BuildContext context) {
     final property = widget.property;
+    final width = MediaQuery.sizeOf(context).width;
+    final isWide = width >= 850;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Maelezo ya nyumba', style: TextStyle(fontWeight: FontWeight.w800))),
-      body: ListView(children: [
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 960),
+          child: ListView(children: [
         SizedBox(
-          height: 300,
+          height: isWide ? 420 : 300,
           child: Stack(children: [
             PageView.builder(
               itemCount: property.photoUrls.length,
@@ -289,6 +295,8 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
           ]),
         ),
       ]),
+        ),
+      ),
     );
   }
 }
