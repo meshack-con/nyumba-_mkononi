@@ -6,6 +6,7 @@ import '../services/api_client.dart';
 import 'auth_screen.dart';
 import 'favorites_screen.dart';
 import 'help_assistant_screen.dart';
+import 'messages_inbox_screen.dart';
 import 'profile_screen.dart';
 import 'property_details_screen.dart';
 
@@ -53,6 +54,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
   String? _postedWithin;
 
   int _tab = 0;
+  int _unreadMessages = 0;
 
   static const Color _pink = Color(0xFFD5005B);
   static const Color _pinkDark = Color(0xFFC30053);
@@ -64,6 +66,14 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
   void initState() {
     super.initState();
     _load();
+    _refreshUnreadBadge();
+  }
+
+  Future<void> _refreshUnreadBadge() async {
+    final token = await ApiClient.instance.getToken();
+    if (token == null || token.isEmpty) return;
+    final count = await ApiClient.instance.getUnreadMessagesCount();
+    if (mounted) setState(() => _unreadMessages = count);
   }
 
   @override
@@ -183,7 +193,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
         break;
 
       case 2:
-        content = const _ComingSoon(label: 'Ujumbe');
+        content = const MessagesInboxScreen();
         break;
 
       case 3:
@@ -235,6 +245,9 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     setState(() {
       _tab = index;
     });
+    // Baada ya kuchagua tab (hasa ukitoka kwenye Ujumbe baada ya kusoma),
+    // sasisha alama ya idadi ya ujumbe usiosomwa.
+    _refreshUnreadBadge();
   }
 
   Widget _navigationRail() {
@@ -256,27 +269,31 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
         color: _navy,
         fontSize: 11,
       ),
-      destinations: const [
-        NavigationRailDestination(
+      destinations: [
+        const NavigationRailDestination(
           icon: Icon(Icons.search_rounded),
           label: Text('Tafuta'),
         ),
-        NavigationRailDestination(
+        const NavigationRailDestination(
           icon: Icon(Icons.favorite_border_rounded),
           selectedIcon: Icon(Icons.favorite_rounded),
           label: Text('Pendwa'),
         ),
         NavigationRailDestination(
-          icon: Icon(Icons.chat_bubble_outline_rounded),
-          selectedIcon: Icon(Icons.chat_bubble_rounded),
-          label: Text('Ujumbe'),
+          icon: _unreadMessages > 0
+              ? Badge(label: Text('$_unreadMessages'), backgroundColor: _pink, child: const Icon(Icons.chat_bubble_outline_rounded))
+              : const Icon(Icons.chat_bubble_outline_rounded),
+          selectedIcon: _unreadMessages > 0
+              ? Badge(label: Text('$_unreadMessages'), backgroundColor: _pink, child: const Icon(Icons.chat_bubble_rounded))
+              : const Icon(Icons.chat_bubble_rounded),
+          label: const Text('Ujumbe'),
         ),
-        NavigationRailDestination(
+        const NavigationRailDestination(
           icon: Icon(Icons.support_agent_outlined),
           selectedIcon: Icon(Icons.support_agent_rounded),
           label: Text('Msaada'),
         ),
-        NavigationRailDestination(
+        const NavigationRailDestination(
           icon: Icon(Icons.person_outline_rounded),
           selectedIcon: Icon(Icons.person_rounded),
           label: Text('Wasifu'),
@@ -319,6 +336,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                 icon: Icons.chat_bubble_outline_rounded,
                 activeIcon: Icons.chat_bubble_rounded,
                 label: 'Ujumbe',
+                badgeCount: _unreadMessages,
               ),
               _bottomItem(
                 index: 3,
@@ -344,8 +362,14 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     required IconData icon,
     IconData? activeIcon,
     required String label,
+    int badgeCount = 0,
   }) {
     final selected = _tab == index;
+    final iconWidget = Icon(
+      selected ? (activeIcon ?? icon) : icon,
+      size: 21,
+      color: selected ? _pink : _navy,
+    );
 
     return Expanded(
       child: InkWell(
@@ -363,11 +387,13 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(18),
               ),
-              child: Icon(
-                selected ? (activeIcon ?? icon) : icon,
-                size: 21,
-                color: selected ? _pink : _navy,
-              ),
+              child: badgeCount > 0
+                  ? Badge(
+                      label: Text('$badgeCount'),
+                      backgroundColor: _pink,
+                      child: iconWidget,
+                    )
+                  : iconWidget,
             ),
             const SizedBox(height: 2),
             Text(

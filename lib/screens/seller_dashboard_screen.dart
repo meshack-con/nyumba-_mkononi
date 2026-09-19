@@ -5,7 +5,7 @@ import '../services/api_client.dart';
 import '../theme/app_theme.dart';
 import 'add_property_screen.dart';
 import 'auth_screen.dart';
-import 'seller_messages_screen.dart';
+import 'messages_inbox_screen.dart';
 
 class SellerDashboardScreen extends StatefulWidget {
   const SellerDashboardScreen({super.key});
@@ -17,6 +17,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   List<Property> _properties = [];
   bool _loading = true;
   bool _checkingAuth = true;
+  int _tab = 0;
 
   @override
   void initState() {
@@ -55,6 +56,13 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     _load();
   }
 
+  Future<void> _selectTab(int index) async {
+    setState(() => _tab = index);
+    // Ukirudi Dashibodi kutoka Ujumbe (baada ya kusoma/kujibu), sasisha
+    // idadi za "unread" kwenye kadi za nyumba.
+    if (index == 0) _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_checkingAuth) {
@@ -63,38 +71,45 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
-    final approved = _properties.where((item) => item.status == 'approved').length;
-    final pending = _properties.where((item) => item.status == 'pending').length;
     final totalUnread = _properties.fold<int>(0, (sum, item) => sum + item.unreadMessagesCount);
+    final chatIcon = const Icon(Icons.chat_bubble_outline_rounded);
+    final chatIconSelected = const Icon(Icons.chat_bubble_rounded);
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Dashibodi yako', style: TextStyle(fontWeight: FontWeight.w900)),
-        actions: [
-          Stack(alignment: Alignment.center, children: [
-            IconButton(
-              onPressed: () async {
-                await Navigator.push(context, MaterialPageRoute(builder: (_) => const SellerMessagesScreen()));
-                _load();
-              },
-              icon: const Icon(Icons.chat_bubble_outline_rounded),
-            ),
-            if (totalUnread > 0)
-              Positioned(
-                right: 6,
-                top: 6,
-                child: Container(
-                  padding: const EdgeInsets.all(3),
-                  constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                  decoration: const BoxDecoration(color: AppTheme.coral, shape: BoxShape.circle),
-                  child: Text('$totalUnread', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w800)),
-                ),
-              ),
-          ]),
-          IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded)),
+      // AppBar inaonyeshwa tu kwenye tab ya Dashibodi - tab ya Ujumbe
+      // ina header yake ya ndani (MessagesInboxScreen) ili kuepuka AppBar
+      // mbili juu ya nyingine.
+      appBar: _tab == 0
+          ? AppBar(
+              title: const Text('Dashibodi yako', style: TextStyle(fontWeight: FontWeight.w900)),
+              actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded))],
+            )
+          : null,
+      floatingActionButton: _tab == 0
+          ? FloatingActionButton.extended(onPressed: _addProperty, backgroundColor: AppTheme.coral, foregroundColor: Colors.white, icon: const Icon(Icons.add_rounded), label: const Text('Weka nyumba'))
+          : null,
+      // Sehemu ya "Ujumbe" iko kwenye button bar chini (siyo juu kabisa) ili
+      // ionekane kirahisi, na inaonyesha idadi ya notification (ujumbe
+      // usiosomwa) juu ya icon yake.
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _tab,
+        onDestinationSelected: _selectTab,
+        destinations: [
+          const NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard_rounded), label: 'Dashibodi'),
+          NavigationDestination(
+            icon: totalUnread > 0 ? Badge(label: Text('$totalUnread'), backgroundColor: AppTheme.coral, child: chatIcon) : chatIcon,
+            selectedIcon: totalUnread > 0 ? Badge(label: Text('$totalUnread'), backgroundColor: AppTheme.coral, child: chatIconSelected) : chatIconSelected,
+            label: 'Ujumbe',
+          ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(onPressed: _addProperty, backgroundColor: AppTheme.coral, foregroundColor: Colors.white, icon: const Icon(Icons.add_rounded), label: const Text('Weka nyumba')),
-      body: RefreshIndicator(onRefresh: _load, child: ListView(padding: const EdgeInsets.fromLTRB(20, 8, 20, 100), children: [
+      body: _tab == 0 ? _dashboardBody() : const MessagesInboxScreen(),
+    );
+  }
+
+  Widget _dashboardBody() {
+    final approved = _properties.where((item) => item.status == 'approved').length;
+    final pending = _properties.where((item) => item.status == 'pending').length;
+    return RefreshIndicator(onRefresh: _load, child: ListView(padding: const EdgeInsets.fromLTRB(20, 8, 20, 100), children: [
         Text('Tangazo lako, mwanzo wa safari ya mtu.', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
         const SizedBox(height: 22),
         Row(children: [_Stat(label: 'Jumla', value: '${_properties.length}', color: AppTheme.primary), const SizedBox(width: 10), _Stat(label: 'Imeidhinishwa', value: '$approved', color: AppTheme.success), const SizedBox(width: 10), _Stat(label: 'Inapitiwa', value: '$pending', color: AppTheme.primaryContainer)]),
@@ -120,8 +135,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
           isThreeLine: true,
           trailing: _StatusBadge(status: property.status),
         )))
-      ])),
-    );
+    ]));
   }
 }
 
