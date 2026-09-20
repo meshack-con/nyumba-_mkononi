@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/property.dart';
+import '../models/user.dart';
 import '../services/api_client.dart';
+import '../theme/app_theme.dart';
+import '../theme/theme_controller.dart';
 import 'auth_screen.dart';
 import 'favorites_screen.dart';
 import 'help_assistant_screen.dart';
+import 'messages_inbox_screen.dart';
 import 'profile_screen.dart';
 import 'property_details_screen.dart';
 
@@ -53,9 +57,11 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
   String? _postedWithin;
 
   int _tab = 0;
+  int _unreadMessages = 0;
+  AppUser? _currentUser;
 
-  static const Color _pink = Color(0xFFD5005B);
-  static const Color _pinkDark = Color(0xFFC30053);
+  static Color get _pink => AppTheme.primary;
+  static Color get _pinkDark => AppTheme.primaryContainer;
   static const Color _navy = Color(0xFF10234D);
   static const Color _muted = Color(0xFF65708A);
   static const Color _page = Color(0xFFF8F7FA);
@@ -64,6 +70,31 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
   void initState() {
     super.initState();
     _load();
+    _refreshUnreadBadge();
+    _loadCurrentUser();
+  }
+
+  Future<void> _loadCurrentUser() async {
+    final token = await ApiClient.instance.getToken();
+    if (token == null || token.isEmpty) {
+      if (mounted) setState(() => _currentUser = null);
+      return;
+    }
+    try {
+      final user = await ApiClient.instance.getMe();
+      await ThemeController.instance.loadForUser(user.id);
+      if (mounted) setState(() => _currentUser = user);
+    } catch (_) {
+      // Token isiyo sahihi au tatizo la mtandao - inabaki kuonyesha
+      // hali ya "Mgeni" bila kuvunja skrini.
+    }
+  }
+
+  Future<void> _refreshUnreadBadge() async {
+    final token = await ApiClient.instance.getToken();
+    if (token == null || token.isEmpty) return;
+    final count = await ApiClient.instance.getUnreadMessagesCount();
+    if (mounted) setState(() => _unreadMessages = count);
   }
 
   @override
@@ -183,7 +214,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
         break;
 
       case 2:
-        content = const _ComingSoon(label: 'Ujumbe');
+        content = const MessagesInboxScreen();
         break;
 
       case 3:
@@ -221,20 +252,38 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     );
   }
 
+  // Tabs ambazo zinahitaji mtumiaji awe ameshaingia (auth) kabla ya
+  // kuzifikia: Pendwa (favorites zake), Ujumbe (mazungumzo yake), Wasifu
+  // (akaunti yake). Tafuta na Msaada zinabaki wazi kwa wageni.
+  static const Set<int> _authRequiredTabs = {1, 2, 4};
+
+  Future<void> _selectTab(int index) async {
+    if (_authRequiredTabs.contains(index)) {
+      final ok = await ensureAuthenticated(context, asSeller: false);
+      if (!ok || !mounted) return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _tab = index;
+    });
+    // Baada ya kuchagua tab (hasa ukitoka kwenye Ujumbe baada ya kusoma),
+    // sasisha alama ya idadi ya ujumbe usiosomwa na taarifa za mtumiaji
+    // (mfano baada ya kuingia au kuhariri wasifu).
+    _refreshUnreadBadge();
+    _loadCurrentUser();
+  }
+
   Widget _navigationRail() {
     return NavigationRail(
       selectedIndex: _tab,
       onDestinationSelected: (index) {
-        if (!mounted) return;
-        setState(() {
-          _tab = index;
-        });
+        _selectTab(index);
       },
       labelType: NavigationRailLabelType.all,
       backgroundColor: Colors.white,
-      selectedIconTheme: const IconThemeData(color: _pink),
+      selectedIconTheme: IconThemeData(color: _pink),
       unselectedIconTheme: const IconThemeData(color: _navy),
-      selectedLabelTextStyle: const TextStyle(
+      selectedLabelTextStyle: TextStyle(
         color: _pink,
         fontWeight: FontWeight.w800,
         fontSize: 11,
@@ -243,27 +292,31 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
         color: _navy,
         fontSize: 11,
       ),
-      destinations: const [
-        NavigationRailDestination(
+      destinations: [
+        const NavigationRailDestination(
           icon: Icon(Icons.search_rounded),
           label: Text('Tafuta'),
         ),
-        NavigationRailDestination(
+        const NavigationRailDestination(
           icon: Icon(Icons.favorite_border_rounded),
           selectedIcon: Icon(Icons.favorite_rounded),
           label: Text('Pendwa'),
         ),
         NavigationRailDestination(
-          icon: Icon(Icons.chat_bubble_outline_rounded),
-          selectedIcon: Icon(Icons.chat_bubble_rounded),
-          label: Text('Ujumbe'),
+          icon: _unreadMessages > 0
+              ? Badge(label: Text('$_unreadMessages'), backgroundColor: _pink, child: const Icon(Icons.chat_bubble_outline_rounded))
+              : const Icon(Icons.chat_bubble_outline_rounded),
+          selectedIcon: _unreadMessages > 0
+              ? Badge(label: Text('$_unreadMessages'), backgroundColor: _pink, child: const Icon(Icons.chat_bubble_rounded))
+              : const Icon(Icons.chat_bubble_rounded),
+          label: const Text('Ujumbe'),
         ),
-        NavigationRailDestination(
+        const NavigationRailDestination(
           icon: Icon(Icons.support_agent_outlined),
           selectedIcon: Icon(Icons.support_agent_rounded),
           label: Text('Msaada'),
         ),
-        NavigationRailDestination(
+        const NavigationRailDestination(
           icon: Icon(Icons.person_outline_rounded),
           selectedIcon: Icon(Icons.person_rounded),
           label: Text('Wasifu'),
@@ -306,6 +359,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                 icon: Icons.chat_bubble_outline_rounded,
                 activeIcon: Icons.chat_bubble_rounded,
                 label: 'Ujumbe',
+                badgeCount: _unreadMessages,
               ),
               _bottomItem(
                 index: 3,
@@ -331,18 +385,18 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     required IconData icon,
     IconData? activeIcon,
     required String label,
+    int badgeCount = 0,
   }) {
     final selected = _tab == index;
+    final iconWidget = Icon(
+      selected ? (activeIcon ?? icon) : icon,
+      size: 21,
+      color: selected ? _pink : _navy,
+    );
 
     return Expanded(
       child: InkWell(
-        onTap: () {
-          if (!mounted) return;
-
-          setState(() {
-            _tab = index;
-          });
-        },
+        onTap: () => _selectTab(index),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -356,11 +410,13 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(18),
               ),
-              child: Icon(
-                selected ? (activeIcon ?? icon) : icon,
-                size: 21,
-                color: selected ? _pink : _navy,
-              ),
+              child: badgeCount > 0
+                  ? Badge(
+                      label: Text('$badgeCount'),
+                      backgroundColor: _pink,
+                      child: iconWidget,
+                    )
+                  : iconWidget,
             ),
             const SizedBox(height: 2),
             Text(
@@ -413,8 +469,10 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
 
     // The image ends before the search card. This prevents the
     // background from continuing underneath the full search/buttons area.
-    final heroHeight = desktop ? 285.0 : 405.0;
-    final imageHeight = desktop ? 215.0 : 285.0;
+    // Reduced so the search card sits closer to the header above it, and
+    // the filter chips (_categoryBar, which follows this sliver) move up too.
+    final heroHeight = desktop ? 255.0 : 270.0;
+    final imageHeight = desktop ? 195.0 : 205.0;
 
     return SizedBox(
       height: heroHeight,
@@ -480,7 +538,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
           Positioned(
             left: desktop ? 22 : 10,
             right: desktop ? 22 : 10,
-            top: desktop ? 150 : 205,
+            top: desktop ? 125 : 140,
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(
@@ -592,10 +650,10 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
           ),
         ),
         const SizedBox(width: 10),
-        const Column(
+        Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            const Text(
               'Karibu,',
               style: TextStyle(
                 color: _navy,
@@ -604,9 +662,11 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                 height: 1,
               ),
             ),
-            SizedBox(height: 3),
+            const SizedBox(height: 3),
             Text(
-              'Mgeni',
+              _currentUser?.fullName ?? 'Mgeni',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: _pinkDark,
                 fontSize: 21,
@@ -621,14 +681,33 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
   }
 
   Widget _loginButton() {
+    if (_currentUser != null) {
+      return InkWell(
+        onTap: () => _selectTab(4),
+        borderRadius: BorderRadius.circular(30),
+        child: CircleAvatar(
+          radius: 21,
+          backgroundColor: _pink,
+          backgroundImage: _currentUser!.profilePichaUrl != null ? NetworkImage(_currentUser!.profilePichaUrl!) : null,
+          child: _currentUser!.profilePichaUrl == null
+              ? Text(
+                  _currentUser!.fullName.isNotEmpty ? _currentUser!.fullName[0].toUpperCase() : '?',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+                )
+              : null,
+        ),
+      );
+    }
     return FilledButton.icon(
-      onPressed: () {
-        Navigator.push(
+      onPressed: () async {
+        await Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => const AuthScreen(),
           ),
         );
+        _loadCurrentUser();
+        _refreshUnreadBadge();
       },
       icon: const Icon(
         Icons.person_outline_rounded,
@@ -698,7 +777,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                   color: _muted,
                   fontSize: 12,
                 ),
-                prefixIcon: const Icon(
+                prefixIcon: Icon(
                   Icons.search_rounded,
                   color: _pink,
                   size: 21,
@@ -737,7 +816,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
-                  borderSide: const BorderSide(
+                  borderSide: BorderSide(
                     color: _pink,
                     width: 1.4,
                   ),
@@ -868,7 +947,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(
           22,
-          10,
+          4,
           22,
           8,
         ),
@@ -1067,7 +1146,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                     ),
                     child: Text(
                       '${_properties.length} nyumba',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: _pink,
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
@@ -1088,11 +1167,13 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                   mainAxisSpacing: 12,
                   crossAxisSpacing: 12,
 
-                  // Increased ratio = shorter cards.
+                  // Card size trimmed back down (kept the photo larger
+                  // than the text below it, but the overall card is
+                  // more compact again).
                   childAspectRatio:
                       width < 560
-                          ? 1.30
-                          : 1.35,
+                          ? 1.20
+                          : 1.28,
                 ),
                 itemBuilder: (context, index) {
                   final property =
@@ -1493,7 +1574,7 @@ class _PropertyCard extends StatelessWidget {
   final VoidCallback onFavorite;
   final VoidCallback onTap;
 
-  static const Color pink = Color(0xFFD5005B);
+  static Color get pink => AppTheme.primary;
   static const Color navy = Color(0xFF10234D);
   static const Color muted = Color(0xFF65708A);
 
@@ -1524,9 +1605,11 @@ class _PropertyCard extends StatelessWidget {
             crossAxisAlignment:
                 CrossAxisAlignment.start,
             children: [
-              // Increased from 105 to 135 so the image area shows more.
+              // Photo area: still bigger than the name/price text below
+              // it, but smaller overall than before so the whole card
+              // is more compact.
               SizedBox(
-                height: 135,
+                height: 145,
                 width: double.infinity,
                 child: Stack(
                   fit: StackFit.expand,
@@ -1615,7 +1698,7 @@ class _PropertyCard extends StatelessWidget {
                           customBorder:
                               const CircleBorder(),
                           onTap: onFavorite,
-                          child: const SizedBox(
+                          child: SizedBox(
                             width: 34,
                             height: 34,
                             child: Icon(
@@ -1641,7 +1724,7 @@ class _PropertyCard extends StatelessWidget {
                             customBorder:
                                 const CircleBorder(),
                             onTap: onFavorite,
-                            child: const SizedBox(
+                            child: SizedBox(
                               width: 34,
                               height: 34,
                               child: Icon(
@@ -1701,7 +1784,7 @@ class _PropertyCard extends StatelessWidget {
                               overflow:
                                   TextOverflow.ellipsis,
                               style:
-                                  const TextStyle(
+                                  TextStyle(
                                 color: muted,
                                 fontSize: 10.5,
                                 fontWeight:
@@ -1726,7 +1809,7 @@ class _PropertyCard extends StatelessWidget {
                               overflow:
                                   TextOverflow.ellipsis,
                               style:
-                                  const TextStyle(
+                                  TextStyle(
                                 color: pink,
                                 fontSize: 12.5,
                                 fontWeight:
@@ -1735,7 +1818,7 @@ class _PropertyCard extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: 4),
-                          const Icon(
+                          Icon(
                             Icons
                                 .arrow_forward_rounded,
                             size: 15,

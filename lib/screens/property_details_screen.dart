@@ -38,6 +38,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
       setState(() => _showContact = false);
       return;
     }
+    if (!await ensureAuthenticated(context, asSeller: false) || !mounted) return;
     setState(() {
       _loadingContact = true;
       _contactError = null;
@@ -246,7 +247,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
                       if (_routePoints.isNotEmpty)
                         PolylineLayer(polylines: [Polyline(points: _routePoints, strokeWidth: 4, color: AppTheme.primary)]),
                       MarkerLayer(markers: [
-                        Marker(point: LatLng(property.latitude, property.longitude), width: 44, height: 44, child: const Icon(Icons.home, color: AppTheme.coral, size: 36)),
+                        Marker(point: LatLng(property.latitude, property.longitude), width: 44, height: 44, child: Icon(Icons.home, color: AppTheme.coral, size: 36)),
                         Marker(point: _userPoint!, width: 40, height: 40, child: const Icon(Icons.my_location, color: Colors.blue, size: 30)),
                       ]),
                     ],

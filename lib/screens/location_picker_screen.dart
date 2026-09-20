@@ -39,7 +39,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
             options: MapOptions(initialCenter: _point, initialZoom: 12, onTap: (_, point) => setState(() => _point = point)),
             children: [
               TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'tz.nyumbamkononi.app'),
-              MarkerLayer(markers: [Marker(point: _point, width: 54, height: 54, child: const Icon(Icons.location_on, color: AppTheme.coral, size: 48))]),
+              MarkerLayer(markers: [Marker(point: _point, width: 54, height: 54, child: Icon(Icons.location_on, color: AppTheme.coral, size: 48))]),
             ],
           ),
           Positioned(

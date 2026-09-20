@@ -19,6 +19,9 @@ class PropertyStatus(str, Enum):
     APPROVED = "approved"
     REJECTED = "rejected"
     EXPIRED = "expired"
+class NotificationType(str, Enum):
+    PLATFORM = "platform"
+    OWNER = "owner"
 class User(Base):
     __tablename__ = "users"
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -30,9 +33,19 @@ class User(Base):
     role: Mapped[UserRole] = mapped_column(SqlEnum(UserRole, name="user_role"))
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     eneo: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    profile_picha_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     properties: Mapped[list["Property"]] = relationship(back_populates="owner")
     favorites: Mapped[list["Favorite"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    feedback: Mapped[list["Feedback"]] = relationship(cascade="all, delete-orphan")
+
+class Feedback(Base):
+    __tablename__ = "feedback"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    message: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
 class Property(Base):
     __tablename__ = "properties"
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -61,6 +74,7 @@ class Property(Base):
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     owner: Mapped[User] = relationship(back_populates="properties")
     favorites: Mapped[list["Favorite"]] = relationship(back_populates="property", cascade="all, delete-orphan")
+    messages: Mapped[list["Message"]] = relationship(cascade="all, delete-orphan")
 class Favorite(Base):
     __tablename__ = "favorites"
     __table_args__ = (UniqueConstraint("user_id", "property_id", name="uq_favorite_user_property"),)
@@ -85,6 +99,19 @@ class Message(Base):
     content: Mapped[str] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    property: Mapped["Property"] = relationship()
+    property: Mapped["Property"] = relationship(back_populates="messages")
     sender: Mapped["User"] = relationship(foreign_keys=[sender_id])
     receiver: Mapped["User"] = relationship(foreign_keys=[receiver_id])
+class Notification(Base):
+    """Arifa kutoka kwa platform yenyewe (Nyumba Mkononi) kwenda kwa
+    mtumiaji - mfano: tangazo limeruhusiwa/limekataliwa, karibu, n.k.
+    Arifa za ujumbe kutoka kwa mmiliki wa nyumba zinatumia Message/
+    conversations moja kwa moja - hazihitaji rekodi hapa."""
+    __tablename__ = "notifications"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(Text)
+    property_id: Mapped[int | None] = mapped_column(ForeignKey("properties.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

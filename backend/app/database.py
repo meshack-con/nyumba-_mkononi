@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     jwt_secret_key: str
     jwt_expire_minutes: int = 60
     cors_origins: str = "http://localhost:3000,http://localhost:8080"
+    cloudinary_cloud_name: str = ""
+    cloudinary_api_key: str = ""
+    cloudinary_api_secret: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
