@@ -15,10 +15,11 @@ import cloudinary.uploader
 from .admin import router as admin_router
 from .auth import create_access_token, get_current_user, hash_password, verify_password
 from .database import Base, engine, get_db, settings
-from .models import Favorite, LoginEvent, Message, Notification, Property, PropertyMode, PropertyStatus, PropertyType, User, UserRole
+from .models import Feedback, Favorite, LoginEvent, Message, Notification, Property, PropertyMode, PropertyStatus, PropertyType, User, UserRole
 from .schemas import (
     AuthResponse,
     ConversationResponse,
+    FeedbackCreate,
     FavoriteResponse,
     LoginRequest,
     MessageCreate,
@@ -191,6 +192,18 @@ async def update_my_photo(
     db.commit()
     db.refresh(current_user)
     return current_user
+
+
+@app.post("/feedback", status_code=201)
+def create_feedback(
+    payload: FeedbackCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    feedback = Feedback(user_id=current_user.id, message=payload.message.strip())
+    db.add(feedback)
+    db.commit()
+    return {"message": "Maoni yamepokelewa"}
 
 
 # --- Public-facing property endpoints ---------------------------------

@@ -35,6 +35,10 @@ class UserUpdate(BaseModel):
     namba_ya_simu: str | None = Field(default=None, min_length=7, max_length=30)
     email: EmailStr | None = None
     eneo: str | None = Field(default=None, max_length=150)
+
+class FeedbackCreate(BaseModel):
+    message: str = Field(min_length=1, max_length=1000)
+
 class AuthResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"

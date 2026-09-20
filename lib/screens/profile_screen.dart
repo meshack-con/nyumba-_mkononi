@@ -21,6 +21,8 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _signedIn = false;
   AppUser? _user;
+  bool _appearanceExpanded = false;
+  bool _primaryColorExpanded = false;
 
   @override
   void initState() {
@@ -82,11 +84,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
         const SizedBox(height: 32),
-        _SectionLabel(s('appearance')),
-        const _ThemeSelector(),
-        const SizedBox(height: 16),
-        _SectionLabel(s('primaryColor')),
-        const _AccentSelector(),
+        _ExpandableSection(
+          title: s('appearance'),
+          expanded: _appearanceExpanded,
+          onTap: () => setState(() => _appearanceExpanded = !_appearanceExpanded),
+          child: const _ThemeSelector(),
+        ),
+        const SizedBox(height: 8),
+        _ExpandableSection(
+          title: s('primaryColor'),
+          expanded: _primaryColorExpanded,
+          onTap: () => setState(() => _primaryColorExpanded = !_primaryColorExpanded),
+          child: const _AccentSelector(),
+        ),
         const SizedBox(height: 24),
         _SectionLabel(s('account')),
         _ProfileTile(icon: Icons.person_outline_rounded, title: s('personalInfo'), onTap: _openPersonalInfo),
@@ -181,6 +191,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _openFeedback() async {
+    if (!_signedIn) {
+      await _openAuth();
+      if (!_signedIn) return;
+    }
     final sent = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -208,6 +222,27 @@ class _SectionLabel extends StatelessWidget {
             fontWeight: FontWeight.w700,
           ),
         ),
+      );
+}
+
+class _ExpandableSection extends StatelessWidget {
+  const _ExpandableSection({required this.title, required this.expanded, required this.onTap, required this.child});
+  final String title;
+  final bool expanded;
+  final VoidCallback onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        children: [
+          ListTile(
+            onTap: onTap,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+            title: Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+            trailing: Icon(expanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded),
+          ),
+          if (expanded) child,
+        ],
       );
 }
 

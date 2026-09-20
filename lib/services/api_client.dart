@@ -208,6 +208,17 @@ class ApiClient {
     return AppUser.fromJson(await _decode(response) as Map<String, dynamic>);
   }
 
+  Future<void> sendFeedback(String message) async {
+    final headers = await _headers(authenticated: true);
+    headers['Content-Type'] = 'application/json';
+    final response = await http.post(
+      Uri.parse('$apiBaseUrl/feedback'),
+      headers: headers,
+      body: jsonEncode({'message': message}),
+    );
+    await _decode(response);
+  }
+
   Future<AppUser> updateMe({
     String? fullName,
     String? phone,
