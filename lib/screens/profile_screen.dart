@@ -81,6 +81,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const _SectionLabel('MUONEKANO'),
         const _ThemeSelector(),
         const SizedBox(height: 24),
+        const _SectionLabel('RANGI KUU'),
+        const _AccentSelector(),
+        const SizedBox(height: 24),
         const _SectionLabel('AKAUNTI'),
         _ProfileTile(icon: Icons.person_outline_rounded, title: 'Taarifa binafsi', onTap: _openPersonalInfo),
         _ProfileTile(icon: Icons.notifications_none_rounded, title: 'Arifa', onTap: _openNotifications),
@@ -210,6 +213,84 @@ class _ProfileTile extends StatelessWidget {
       ),
       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
       trailing: const Icon(Icons.chevron_right_rounded),
+    );
+  }
+}
+
+class _AccentSelector extends StatelessWidget {
+  const _AccentSelector();
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = ThemeController.instance;
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        child: Wrap(
+          spacing: 10,
+          runSpacing: 14,
+          children: [
+            for (final option in ThemeController.accents)
+              _AccentDot(
+                option: option,
+                selected: option.id == controller.accent.id,
+                onTap: () => controller.setAccent(option),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AccentDot extends StatelessWidget {
+  const _AccentDot({required this.option, required this.selected, required this.onTap});
+  final AccentOption option;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final onSurface = Theme.of(context).colorScheme.onSurface;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: option.name,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: SizedBox(
+          width: 70,
+          child: Column(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: option.primary,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: selected ? onSurface : Colors.transparent,
+                    width: 3,
+                  ),
+                ),
+                child: selected ? const Icon(Icons.check_rounded, color: Colors.white) : null,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                option.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
