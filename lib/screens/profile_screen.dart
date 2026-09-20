@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/user.dart';
 import '../services/api_client.dart';
 import '../theme/app_theme.dart';
+import '../theme/theme_controller.dart';
 import 'auth_screen.dart';
 import 'notifications_screen.dart';
 import 'personal_info_screen.dart';
@@ -43,6 +44,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return ListView(
       padding: EdgeInsets.fromLTRB(20, MediaQuery.paddingOf(context).top + 28, 20, 32),
       children: [
@@ -72,10 +74,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Text(
             _signedIn ? 'Akaunti yako iko tayari' : 'Ingia ili kuhifadhi nyumba na kuwasiliana',
             textAlign: TextAlign.center,
-            style: const TextStyle(color: AppTheme.success),
+            style: TextStyle(color: isDark ? AppTheme.darkSuccess : AppTheme.success),
           ),
         ),
         const SizedBox(height: 32),
+        const _SectionLabel('MUONEKANO'),
+        const _ThemeSelector(),
+        const SizedBox(height: 24),
         const _SectionLabel('AKAUNTI'),
         _ProfileTile(icon: Icons.person_outline_rounded, title: 'Taarifa binafsi', onTap: _openPersonalInfo),
         _ProfileTile(icon: Icons.notifications_none_rounded, title: 'Arifa', onTap: _openNotifications),
@@ -134,8 +139,53 @@ class _SectionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
         padding: const EdgeInsets.fromLTRB(8, 0, 8, 10),
-        child: Text(label, style: const TextStyle(color: AppTheme.muted, fontWeight: FontWeight.w700)),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
       );
+}
+
+class _ThemeSelector extends StatelessWidget {
+  const _ThemeSelector();
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = ThemeController.instance;
+    return ListenableBuilder(
+      listenable: controller,
+      builder: (context, _) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+        child: SizedBox(
+          width: double.infinity,
+          child: SegmentedButton<ThemeMode>(
+            showSelectedIcon: false,
+            style: SegmentedButton.styleFrom(
+              selectedBackgroundColor: AppTheme.primary,
+              selectedForegroundColor: Colors.white,
+            ),
+            segments: const [
+              ButtonSegment(
+                value: ThemeMode.light,
+                icon: Icon(Icons.light_mode_outlined),
+                label: Text('Nyeupe'),
+              ),
+              ButtonSegment(
+                value: ThemeMode.dark,
+                icon: Icon(Icons.dark_mode_outlined),
+                label: Text('Giza'),
+              ),
+            ],
+            selected: {controller.mode},
+            onSelectionChanged: (selection) => controller.setMode(selection.first),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _ProfileTile extends StatelessWidget {
@@ -146,11 +196,20 @@ class _ProfileTile extends StatelessWidget {
   final bool danger;
 
   @override
-  Widget build(BuildContext context) => ListTile(
-        onTap: onTap,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-        leading: CircleAvatar(backgroundColor: danger ? Colors.red.withAlpha(20) : AppTheme.surfaceLow, foregroundColor: danger ? Colors.red : AppTheme.navy, child: Icon(icon)),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-        trailing: const Icon(Icons.chevron_right_rounded),
-      );
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final dangerColor = isDark ? Colors.red.shade300 : Colors.red;
+    return ListTile(
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      leading: CircleAvatar(
+        backgroundColor: danger ? dangerColor.withAlpha(30) : scheme.surfaceContainerLow,
+        foregroundColor: danger ? dangerColor : scheme.onSurface,
+        child: Icon(icon),
+      ),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+      trailing: const Icon(Icons.chevron_right_rounded),
+    );
+  }
 }
