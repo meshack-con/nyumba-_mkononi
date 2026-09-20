@@ -13,9 +13,10 @@ import cloudinary
 import cloudinary.uploader
 
 from .admin import router as admin_router
+from .payments import router as payments_router
 from .auth import create_access_token, get_current_user, hash_password, verify_password
 from .database import Base, engine, get_db, settings
-from .models import LEGACY_TYPE_GROUPS, Feedback, Favorite, LoginEvent, Message, Notification, Property, PropertyMode, PropertyStatus, PropertyType, User, UserRole
+from .models import Feedback, Favorite, LoginEvent, Message, Notification, Payment, PaymentStatus, Property, PropertyMode, PropertyStatus, PropertyType, User, UserRole
 from .schemas import (
     AuthResponse,
     ConversationResponse,
@@ -41,6 +42,7 @@ UPLOADS_DIR.mkdir(exist_ok=True)
 app = FastAPI(title="Nyumba Mkononi API", version="1.0.0")
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 app.include_router(admin_router)
+app.include_router(payments_router)
 
 cloudinary.config(
     cloud_name=settings.cloudinary_cloud_name,
@@ -72,21 +74,6 @@ def create_tables() -> None:
         connection.execute(text(
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_picha_url VARCHAR(500)"
         ))
-    ensure_property_type_values()
-
-
-def ensure_property_type_values() -> None:
-    # Enum ya Postgres `property_type` ilishaundwa na aina za zamani. `create_all`
-    # haiongezi thamani MPYA (chumba, kiwanja) kwenye enum iliyopo, kwa hiyo
-    # tunaziongeza hapa kwa `IF NOT EXISTS` - salama kila app inapoanza.
-    # `ADD VALUE` inafanya kazi vizuri zaidi nje ya transaction, ndiyo maana
-    # tunatumia AUTOCOMMIT. SQLAlchemy inahifadhi JINA la member (CHUMBA),
-    # si thamani yake (chumba).
-    if engine.dialect.name != "postgresql":
-        return
-    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
-        for member in PropertyType:
-            connection.execute(text(f"ALTER TYPE property_type ADD VALUE IF NOT EXISTS '{member.name}'"))
 
 
 def ensure_seller(user: User) -> None:
@@ -266,7 +253,7 @@ def list_properties(
     if max_price is not None:
         query = query.where(Property.price <= max_price)
     if property_type is not None:
-        query = query.where(Property.aina.in_(LEGACY_TYPE_GROUPS.get(property_type, [property_type])))
+        query = query.where(Property.aina == property_type)
     if mode is not None:
         query = query.where(Property.mode == mode)
     if has_wifi is not None:
@@ -480,6 +467,7 @@ async def create_property(
     furnished: bool = Form(False),
     swimming_pool: bool = Form(False),
     description: str = Form(...),
+    payment_ref: str = Form(..., description="tx_ref ya malipo ya ada ya TZS 5,000 (kutoka /payments/listing-fee/initiate)"),
     photos: list[UploadFile] = File(...),
     verification_doc: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
@@ -488,6 +476,19 @@ async def create_property(
     ensure_seller(current_user)
     if len(photos) != 3:
         raise HTTPException(status_code=400, detail="Tuma picha 3 za nyumba")
+
+    # --- Hakikisha ada ya TZS 5,000 imelipwa kabla ya kupokea tangazo ---
+    # Tangazo halikubaliwi bila malipo halisi, yaliyothibitishwa na
+    # Flutterwave, na tx_ref moja haiwezi kutumika kwenye matangazo
+    # mawili (property_id ikishawekwa, tx_ref hiyo "imeisha").
+    payment = db.scalar(select(Payment).where(Payment.tx_ref == payment_ref))
+    if payment is None or payment.user_id != current_user.id:
+        raise HTTPException(status_code=402, detail="Malipo hayakupatikana. Lipa TZS 5,000 kwanza kabla ya kutuma tangazo.")
+    if payment.status != PaymentStatus.SUCCESSFUL:
+        raise HTTPException(status_code=402, detail="Malipo ya TZS 5,000 hayajakamilika bado. Kamilisha malipo kisha jaribu tena.")
+    if payment.property_id is not None:
+        raise HTTPException(status_code=409, detail="Malipo haya tayari yametumika kwenye tangazo lingine.")
+
     photo_urls = [await save_upload(photo, "properties") for photo in photos]
     verification_doc_url = await save_upload(verification_doc, "verification-docs")
     property_item = Property(
@@ -515,6 +516,11 @@ async def create_property(
     db.add(property_item)
     db.commit()
     db.refresh(property_item)
+
+    # Funga malipo haya kwa tangazo hili ili yasitumike tena.
+    payment.property_id = property_item.id
+    db.commit()
+
     return property_item
 
 

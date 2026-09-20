@@ -2,12 +2,12 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-import '../models/property_type.dart';
+import '../models/listing_payment.dart';
 import '../services/api_client.dart';
-import '../services/location_service.dart';
 import '../theme/app_theme.dart';
-import '../widgets/location_field.dart';
+import 'location_picker_screen.dart';
 
 class AddPropertyScreen extends StatefulWidget {
   const AddPropertyScreen({super.key});
@@ -20,7 +20,8 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   final _name = TextEditingController();
   final _price = TextEditingController();
   final _description = TextEditingController();
-  String _type = PropertyTypes.chumba;
+  final _area = TextEditingController();
+  String _type = 'apartment';
   String _mode = 'rent';
   bool _wifi = false;
   bool _carParking = false;
@@ -41,9 +42,14 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   bool _loading = false;
   String? _error;
 
+  // --- Malipo ya ada ya kutangaza nyumba (TZS 5,000 - Flutterwave) -----
+  ListingPayment? _payment;
+  bool _paymentBusy = false;
+  String? _paymentError;
+
   @override
   void dispose() {
-    for (final controller in [_name, _price, _description]) {
+    for (final controller in [_name, _price, _description, _area]) {
       controller.dispose();
     }
     super.dispose();
@@ -77,10 +83,120 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     setState(() { _document = result.files.single.bytes; _documentName = result.files.single.name; });
   }
 
+  Future<void> _pickLocation() async {
+    final result = await Navigator.push<PickedLocation>(context, MaterialPageRoute(builder: (_) => LocationPickerScreen(initial: _location)));
+    if (result != null) setState(() { _location = result; _area.text = result.label; });
+  }
+
+  // --- Hatua 1: mpangishaji analipa TZS 5,000 kwa Flutterwave -----------
+
+  Future<String?> _askForPaymentPhone() {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Lipa TZS 5,000'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Weka namba ya simu (M-Pesa / Tigo Pesa / Airtel Money / Halo Pesa) utakayotumia kulipia ada ya kutangaza nyumba.'),
+            const SizedBox(height: 14),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.phone,
+              autofocus: true,
+              decoration: const InputDecoration(labelText: 'Namba ya simu', prefixIcon: Icon(Icons.phone_android_outlined), hintText: '07XXXXXXXX'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Ghairi')),
+          ElevatedButton(
+            onPressed: () {
+              if (controller.text.trim().length < 7) return;
+              Navigator.pop(dialogContext, controller.text.trim());
+            },
+            child: const Text('Endelea kulipa'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _startPaymentFlow() async {
+    final phone = await _askForPaymentPhone();
+    if (phone == null) return;
+    setState(() { _paymentBusy = true; _paymentError = null; });
+    try {
+      final payment = await ApiClient.instance.initiateListingFeePayment(phoneNumber: phone);
+      setState(() => _payment = payment);
+      final link = payment.redirectLink;
+      if (link != null && link.isNotEmpty) {
+        final uri = Uri.tryParse(link);
+        if (uri != null) await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+      if (mounted) await _confirmPaymentDialog();
+    } on ApiException catch (error) {
+      setState(() => _paymentError = error.message);
+    } catch (_) {
+      setState(() => _paymentError = 'Imeshindikana kuanzisha malipo. Jaribu tena.');
+    } finally {
+      if (mounted) setState(() => _paymentBusy = false);
+    }
+  }
+
+  Future<void> _confirmPaymentDialog() async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) {
+          Future<void> checkNow() async {
+            setDialogState(() => _paymentBusy = true);
+            try {
+              final updated = await ApiClient.instance.getListingFeePaymentStatus(_payment!.txRef);
+              setState(() => _payment = updated);
+              if (updated.isSuccessful || updated.isFailed) {
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+              }
+            } catch (_) {
+              // Mtandao huenda umekatika - mtumiaji anaweza kujaribu tena.
+            } finally {
+              setDialogState(() => _paymentBusy = false);
+            }
+          }
+
+          return AlertDialog(
+            title: const Text('Thibitisha malipo'),
+            content: Text(
+              _paymentBusy
+                  ? 'Tunaangalia hali ya malipo yako...'
+                  : 'Baada ya kukamilisha malipo ya TZS 5,000 kwenye ukurasa ulioufungua, bonyeza "Nimeshalipa" kuthibitisha.',
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Nitathibitisha baadaye')),
+              ElevatedButton(
+                onPressed: _paymentBusy ? null : checkNow,
+                child: const Text('Nimeshalipa'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // --- Hatua 2: tuma tangazo (baada ya malipo kufanikiwa) ----------------
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (!_photosComplete || _document == null || _location == null) {
-      setState(() => _error = 'Ongeza picha 3, hati ya umiliki na eneo la nyumba (bonyeza "Weka eneo").');
+      setState(() => _error = 'Ongeza picha 3, hati ya umiliki na eneo kwenye ramani.');
+      return;
+    }
+    if (_payment == null || !_payment!.isSuccessful) {
+      setState(() => _error = 'Lipa TZS 5,000 kwanza kabla ya kutuma tangazo.');
       return;
     }
     setState(() { _loading = true; _error = null; });
@@ -88,11 +204,12 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
       final photoBytes = _photos.map((photo) => photo!).toList();
       final photoNames = _photoNames.map((name) => name!).toList();
       await ApiClient.instance.createProperty(
+        paymentRef: _payment!.txRef,
         name: _name.text.trim(),
         type: _type,
         mode: _mode,
         price: int.parse(_price.text.trim()),
-        locationLabel: _location!.label,
+        locationLabel: _area.text.trim(),
         latitude: _location!.point.latitude,
         longitude: _location!.point.longitude,
         hasWifi: _wifi,
@@ -191,7 +308,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
               ),
               const SizedBox(height: 22),
               _section('Taarifa za msingi', 'Eleza nyumba yako kwa uwazi'),
-              TextFormField(controller: _name, validator: _required, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Jina la mtaa / kata', hintText: 'Mfano: Sinza, Mikocheni', prefixIcon: Icon(Icons.location_city_outlined))),
+              TextFormField(controller: _name, validator: _required, decoration: const InputDecoration(labelText: 'Jina la nyumba', prefixIcon: Icon(Icons.home_work_outlined))),
               const SizedBox(height: 12),
               Row(children: [
                 Expanded(
@@ -199,9 +316,10 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                     value: _type,
                     decoration: const InputDecoration(labelText: 'Aina'),
                     items: const [
-                      DropdownMenuItem(value: PropertyTypes.chumba, child: Text('Chumba')),
-                      DropdownMenuItem(value: PropertyTypes.nyumba, child: Text('Nyumba')),
-                      DropdownMenuItem(value: PropertyTypes.kiwanja, child: Text('Kiwanja')),
+                      DropdownMenuItem(value: 'apartment', child: Text('Apartment')),
+                      DropdownMenuItem(value: 'nyumba', child: Text('Nyumba')),
+                      DropdownMenuItem(value: 'studio', child: Text('Studio')),
+                      DropdownMenuItem(value: 'villa', child: Text('Villa')),
                     ],
                     onChanged: (value) => setState(() => _type = value!),
                   ),
@@ -234,8 +352,18 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
               SwitchListTile(contentPadding: EdgeInsets.zero, secondary: const Icon(Icons.chair_rounded), title: const Text('Ina samani (furnished)'), value: _furnished, onChanged: (value) => setState(() => _furnished = value)),
               SwitchListTile(contentPadding: EdgeInsets.zero, secondary: const Icon(Icons.pool_rounded), title: const Text('Ina swimming pool'), value: _swimmingPool, onChanged: (value) => setState(() => _swimmingPool = value)),
               const SizedBox(height: 10),
-              _section('Eneo', 'Ruhusu GPS ya simu yako'),
-              LocationField(value: _location, onChanged: (location) => setState(() { _location = location; _error = null; })),
+              _section('Eneo', 'Chagua alama kwenye ramani'),
+              TextFormField(
+                controller: _area,
+                readOnly: true,
+                validator: _required,
+                onTap: _pickLocation,
+                decoration: InputDecoration(
+                  labelText: 'Eneo la nyumba',
+                  prefixIcon: const Icon(Icons.location_on_outlined),
+                  suffixIcon: IconButton(onPressed: _pickLocation, icon: const Icon(Icons.map_outlined)),
+                ),
+              ),
               const SizedBox(height: 22),
               _section('Uthibitisho wa umiliki', _documentName ?? 'Hati inahitajika'),
               OutlinedButton.icon(onPressed: _pickDocument, icon: const Icon(Icons.upload_file_outlined), label: Text(_documentName ?? 'Pakia hati')),
@@ -243,21 +371,40 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(color: AppTheme.sand, borderRadius: BorderRadius.circular(12)),
-                child: const Row(
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.info_outline_rounded),
-                    SizedBox(width: 10),
-                    Expanded(child: Text('Malipo ya tangazo ni TZS 5,000. Tangazo litapitiwa ndani ya masaa 24 baada ya kutumwa.')),
+                    Icon(_payment?.isSuccessful == true ? Icons.check_circle_rounded : Icons.info_outline_rounded,
+                        color: _payment?.isSuccessful == true ? Colors.green : null),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _payment?.isSuccessful == true
+                            ? 'Malipo ya TZS 5,000 yamekamilika. Sasa unaweza kutuma tangazo.'
+                            : 'Malipo ya tangazo ni TZS 5,000 (kupitia Flutterwave). Tangazo litapitiwa ndani ya masaa 24 baada ya kutumwa.',
+                      ),
+                    ),
                   ],
                 ),
               ),
+              if (_paymentError != null) Padding(padding: const EdgeInsets.only(top: 10), child: Text(_paymentError!, style: const TextStyle(color: Colors.red))),
               if (_error != null) Padding(padding: const EdgeInsets.only(top: 14), child: Text(_error!, style: const TextStyle(color: Colors.red))),
               const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _loading ? null : _submit,
-                child: _loading ? const CircularProgressIndicator(color: Colors.white) : const Text('Tuma tangazo — TZS 5,000'),
-              ),
+              if (_payment == null || !_payment!.isSuccessful) ...[
+                OutlinedButton.icon(
+                  onPressed: _paymentBusy ? null : _startPaymentFlow,
+                  icon: _paymentBusy
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.payments_outlined),
+                  label: Text(_payment != null && _payment!.isPending ? 'Thibitisha / jaribu malipo tena' : 'Lipa TZS 5,000 kuendelea'),
+                ),
+                const SizedBox(height: 10),
+                const ElevatedButton(onPressed: null, child: Text('Tuma tangazo — lipa kwanza')),
+              ] else
+                ElevatedButton(
+                  onPressed: _loading ? null : _submit,
+                  child: _loading ? const CircularProgressIndicator(color: Colors.white) : const Text('Tuma tangazo'),
+                ),
             ],
           ),
         ),

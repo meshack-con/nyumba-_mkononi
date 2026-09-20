@@ -197,3 +197,28 @@ class NotificationResponse(BaseModel):
     property_id: int | None = None
     property_name: str | None = None
     other_user_id: int | None = None
+
+
+# --- Malipo ya ada ya kutangaza nyumba (Flutterwave) --------------------
+
+class PaymentInitiateRequest(BaseModel):
+    """Namba ya simu itakayotumika kulipia ada ya TZS 5,000 (haihitajiki
+    kama si lazima kwa aina ya malipo aliyochagua mtumiaji - lakini
+    tunaitumia kwa mobile money ya Tanzania)."""
+    phone_number: str = Field(min_length=7, max_length=20)
+
+
+class PaymentInitiateResponse(BaseModel):
+    tx_ref: str
+    amount: int
+    currency: str
+    redirect_link: str | None = None
+    status: str
+
+
+class PaymentStatusResponse(BaseModel):
+    tx_ref: str
+    status: str
+    amount: int
+    currency: str
+    used: bool

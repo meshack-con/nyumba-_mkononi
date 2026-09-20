@@ -14,6 +14,24 @@ class Settings(BaseSettings):
     cloudinary_api_key: str = ""
     cloudinary_api_secret: str = ""
 
+    # --- Flutterwave (malipo ya ada ya kutangaza nyumba - TZS 5,000) ----
+    # Hizi ni "Test API keys" (v4 - OAuth2 client credentials), zinazopatikana
+    # kwenye Flutterwave Dashboard -> Developers -> Test API keys.
+    flutterwave_client_id: str = ""
+    flutterwave_client_secret: str = ""
+    flutterwave_encryption_key: str = ""
+    # "verif-hash"/"flutterwave-signature" secret unayoiweka kwenye Flutterwave
+    # Dashboard -> Webhooks, kwa ajili ya kuthibitisha kuwa webhook inatoka
+    # kwa Flutterwave kweli (siyo mtu anayejifanya).
+    flutterwave_webhook_secret_hash: str = ""
+    # Sandbox (test keys) hutumia "developersandbox-api...", production
+    # hutumia "api.flutterwave.cloud/f4b/production" - badilisha unapokwenda live.
+    flutterwave_base_url: str = "https://developersandbox-api.flutterwave.com"
+    flutterwave_idp_url: str = "https://idp.flutterwave.com/realms/flutterwave/protocol/openid-connect/token"
+    # Ada ya kutangaza nyumba moja (seller analipa hii kabla tangazo halijapokelewa).
+    property_listing_fee: int = 5000
+    property_listing_currency: str = "TZS"
+
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 

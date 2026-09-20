@@ -7,22 +7,10 @@ class UserRole(str, Enum):
     BUYER = "buyer"
     SELLER = "seller"
 class PropertyType(str, Enum):
-    # Aina mpya zinazotumika sasa: chumba, nyumba, kiwanja.
-    CHUMBA = "chumba"
-    NYUMBA = "nyumba"
-    KIWANJA = "kiwanja"
-    # Aina za zamani - zinabaki ili matangazo yaliyopo yasiharibike.
-    # Chumba <- studio; Nyumba <- apartment, villa (angalia LEGACY_TYPE_GROUPS).
     APARTMENT = "apartment"
+    NYUMBA = "nyumba"
     STUDIO = "studio"
     VILLA = "villa"
-
-
-# Kuchuja kwa aina mpya pia kunajumuisha matangazo ya zamani yanayolingana nayo.
-LEGACY_TYPE_GROUPS = {
-    PropertyType.CHUMBA: [PropertyType.CHUMBA, PropertyType.STUDIO],
-    PropertyType.NYUMBA: [PropertyType.NYUMBA, PropertyType.APARTMENT, PropertyType.VILLA],
-}
 class PropertyMode(str, Enum):
     RENT = "rent"
     SALE = "sale"
@@ -34,6 +22,12 @@ class PropertyStatus(str, Enum):
 class NotificationType(str, Enum):
     PLATFORM = "platform"
     OWNER = "owner"
+class PaymentPurpose(str, Enum):
+    PROPERTY_LISTING = "property_listing"
+class PaymentStatus(str, Enum):
+    PENDING = "pending"
+    SUCCESSFUL = "successful"
+    FAILED = "failed"
 class User(Base):
     __tablename__ = "users"
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -114,6 +108,26 @@ class Message(Base):
     property: Mapped["Property"] = relationship(back_populates="messages")
     sender: Mapped["User"] = relationship(foreign_keys=[sender_id])
     receiver: Mapped["User"] = relationship(foreign_keys=[receiver_id])
+class Payment(Base):
+    """Malipo ya ada ya kutangaza nyumba (TZS 5,000) kupitia Flutterwave.
+
+    Mpangishaji/muuzaji analipa KABLA hajaweza kutuma tangazo jipya la
+    nyumba - `tx_ref` ndio kiungo kati ya malipo haya na Flutterwave, na
+    `property_id` inajazwa pale tangazo linapotengenezwa kwa kutumia
+    malipo haya (ili tx_ref moja isitumike mara mbili)."""
+    __tablename__ = "payments"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    tx_ref: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    charge_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    purpose: Mapped[PaymentPurpose] = mapped_column(SqlEnum(PaymentPurpose, name="payment_purpose"), default=PaymentPurpose.PROPERTY_LISTING)
+    amount: Mapped[int] = mapped_column(Integer)
+    currency: Mapped[str] = mapped_column(String(10), default="TZS")
+    status: Mapped[PaymentStatus] = mapped_column(SqlEnum(PaymentStatus, name="payment_status"), default=PaymentStatus.PENDING)
+    property_id: Mapped[int | None] = mapped_column(ForeignKey("properties.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    user: Mapped["User"] = relationship()
 class Notification(Base):
     """Arifa kutoka kwa platform yenyewe (Nyumba Mkononi) kwenda kwa
     mtumiaji - mfano: tangazo limeruhusiwa/limekataliwa, karibu, n.k.

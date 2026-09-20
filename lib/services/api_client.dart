@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/conversation.dart';
+import '../models/listing_payment.dart';
 import '../models/message.dart';
 import '../models/notification_item.dart';
 import '../models/property.dart';
@@ -268,6 +269,31 @@ class ApiClient {
     return data.map((item) => Property.fromJson(item as Map<String, dynamic>)).toList();
   }
 
+  /// Anaanzisha malipo ya ada ya kutangaza nyumba (TZS 5,000) kupitia
+  /// Flutterwave. Inarudisha `txRef` (itahitajika baadaye kutuma tangazo)
+  /// na `redirectLink` (ukurasa wa kufungua kwenye browser kukamilisha malipo).
+  Future<ListingPayment> initiateListingFeePayment({required String phoneNumber}) async {
+    final headers = await _headers(authenticated: true);
+    headers['Content-Type'] = 'application/json';
+    final response = await http.post(
+      Uri.parse('$apiBaseUrl/payments/listing-fee/initiate'),
+      headers: headers,
+      body: jsonEncode({'phone_number': phoneNumber}),
+    );
+    return ListingPayment.fromJson(await _decode(response) as Map<String, dynamic>);
+  }
+
+  /// Anaangalia hali ya malipo ya ada ya kutangaza nyumba (pending /
+  /// successful / failed) - inaitwa mara kwa mara (polling) baada ya
+  /// seller kurudi kutoka ukurasa wa Flutterwave.
+  Future<ListingPayment> getListingFeePaymentStatus(String txRef) async {
+    final response = await http.get(
+      Uri.parse('$apiBaseUrl/payments/listing-fee/$txRef/status'),
+      headers: await _headers(authenticated: true),
+    );
+    return ListingPayment.fromJson(await _decode(response) as Map<String, dynamic>);
+  }
+
   Future<Property> createProperty({
     required String name,
     required String type,
@@ -285,6 +311,7 @@ class ApiClient {
     required bool furnished,
     required bool swimmingPool,
     required String description,
+    required String paymentRef,
     required List<Uint8List> photos,
     required List<String> photoNames,
     required Uint8List verificationDoc,
@@ -309,6 +336,7 @@ class ApiClient {
       'furnished': '$furnished',
       'swimming_pool': '$swimmingPool',
       'description': description,
+      'payment_ref': paymentRef,
     });
     for (var index = 0; index < photos.length; index++) {
       request.files.add(http.MultipartFile.fromBytes('photos', photos[index], filename: photoNames[index]));
