@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import '../models/property.dart';
 import '../models/user.dart';
 import '../services/api_client.dart';
+import '../theme/app_theme.dart';
+import '../theme/theme_controller.dart';
 import 'auth_screen.dart';
 import 'favorites_screen.dart';
 import 'help_assistant_screen.dart';
@@ -58,8 +60,8 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
   int _unreadMessages = 0;
   AppUser? _currentUser;
 
-  static const Color _pink = Color(0xFFD5005B);
-  static const Color _pinkDark = Color(0xFFC30053);
+  static Color get _pink => AppTheme.primary;
+  static Color get _pinkDark => AppTheme.primaryContainer;
   static const Color _navy = Color(0xFF10234D);
   static const Color _muted = Color(0xFF65708A);
   static const Color _page = Color(0xFFF8F7FA);
@@ -80,6 +82,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     }
     try {
       final user = await ApiClient.instance.getMe();
+      await ThemeController.instance.loadForUser(user.id);
       if (mounted) setState(() => _currentUser = user);
     } catch (_) {
       // Token isiyo sahihi au tatizo la mtandao - inabaki kuonyesha
@@ -278,9 +281,9 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
       },
       labelType: NavigationRailLabelType.all,
       backgroundColor: Colors.white,
-      selectedIconTheme: const IconThemeData(color: _pink),
+      selectedIconTheme: IconThemeData(color: _pink),
       unselectedIconTheme: const IconThemeData(color: _navy),
-      selectedLabelTextStyle: const TextStyle(
+      selectedLabelTextStyle: TextStyle(
         color: _pink,
         fontWeight: FontWeight.w800,
         fontSize: 11,
@@ -664,7 +667,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
               _currentUser?.fullName ?? 'Mgeni',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 color: _pinkDark,
                 fontSize: 21,
                 fontWeight: FontWeight.w900,
@@ -774,7 +777,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                   color: _muted,
                   fontSize: 12,
                 ),
-                prefixIcon: const Icon(
+                prefixIcon: Icon(
                   Icons.search_rounded,
                   color: _pink,
                   size: 21,
@@ -813,7 +816,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                 ),
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(24),
-                  borderSide: const BorderSide(
+                  borderSide: BorderSide(
                     color: _pink,
                     width: 1.4,
                   ),
@@ -1143,7 +1146,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                     ),
                     child: Text(
                       '${_properties.length} nyumba',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: _pink,
                         fontSize: 11,
                         fontWeight: FontWeight.w800,
@@ -1571,7 +1574,7 @@ class _PropertyCard extends StatelessWidget {
   final VoidCallback onFavorite;
   final VoidCallback onTap;
 
-  static const Color pink = Color(0xFFD5005B);
+  static Color get pink => AppTheme.primary;
   static const Color navy = Color(0xFF10234D);
   static const Color muted = Color(0xFF65708A);
 
@@ -1695,7 +1698,7 @@ class _PropertyCard extends StatelessWidget {
                           customBorder:
                               const CircleBorder(),
                           onTap: onFavorite,
-                          child: const SizedBox(
+                          child: SizedBox(
                             width: 34,
                             height: 34,
                             child: Icon(
@@ -1721,7 +1724,7 @@ class _PropertyCard extends StatelessWidget {
                             customBorder:
                                 const CircleBorder(),
                             onTap: onFavorite,
-                            child: const SizedBox(
+                            child: SizedBox(
                               width: 34,
                               height: 34,
                               child: Icon(
@@ -1781,7 +1784,7 @@ class _PropertyCard extends StatelessWidget {
                               overflow:
                                   TextOverflow.ellipsis,
                               style:
-                                  const TextStyle(
+                                  TextStyle(
                                 color: muted,
                                 fontSize: 10.5,
                                 fontWeight:
@@ -1806,7 +1809,7 @@ class _PropertyCard extends StatelessWidget {
                               overflow:
                                   TextOverflow.ellipsis,
                               style:
-                                  const TextStyle(
+                                  TextStyle(
                                 color: pink,
                                 fontSize: 12.5,
                                 fontWeight:
@@ -1815,7 +1818,7 @@ class _PropertyCard extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(width: 4),
-                          const Icon(
+                          Icon(
                             Icons
                                 .arrow_forward_rounded,
                             size: 15,

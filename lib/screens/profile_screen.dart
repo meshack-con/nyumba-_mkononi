@@ -85,24 +85,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ),
         const SizedBox(height: 32),
-        _ExpandableSection(
-          title: s('appearance'),
-          expanded: _appearanceExpanded,
-          onTap: () {
-            _toggleAppearance();
-          },
-          child: const _ThemeSelector(),
-        ),
-        const SizedBox(height: 8),
-        _ExpandableSection(
-          title: s('primaryColor'),
-          expanded: _primaryColorExpanded,
-          onTap: () {
-            _togglePrimaryColor();
-          },
-          child: const _AccentSelector(),
-        ),
-        const SizedBox(height: 24),
         _SectionLabel(s('account')),
         _ProfileTile(icon: Icons.person_outline_rounded, title: s('personalInfo'), onTap: _openPersonalInfo),
         _ProfileTile(icon: Icons.notifications_none_rounded, title: s('notifications'), onTap: _openNotifications),
@@ -125,6 +107,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
           title: s('feedback'),
           subtitle: s('feedbackSubtitle'),
           onTap: _openFeedback,
+        ),
+        const SizedBox(height: 24),
+        _ExpandableSection(
+          title: s('appearance'),
+          expanded: _appearanceExpanded,
+          onTap: () {
+            _toggleAppearance();
+          },
+          child: const _ThemeSelector(),
+        ),
+        const SizedBox(height: 8),
+        _ExpandableSection(
+          title: s('primaryColor'),
+          expanded: _primaryColorExpanded,
+          onTap: () {
+            _togglePrimaryColor();
+          },
+          child: const _AccentSelector(),
         ),
       ],
     );
