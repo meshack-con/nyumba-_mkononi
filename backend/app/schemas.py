@@ -27,7 +27,25 @@ class UserResponse(BaseModel):
     role: UserRole
     is_admin: bool
     eneo: str | None
+    profile_picha_url: str | None = None
     created_at: datetime
+class UserUpdate(BaseModel):
+    """Taarifa binafsi zinazoruhusiwa kuhaririwa na mtumiaji mwenyewe."""
+    jina_kamili: str | None = Field(default=None, min_length=2, max_length=150)
+    namba_ya_simu: str | None = Field(default=None, min_length=7, max_length=30)
+    email: EmailStr | None = None
+    eneo: str | None = Field(default=None, max_length=150)
+
+class FeedbackCreate(BaseModel):
+    message: str = Field(min_length=1, max_length=1000)
+
+    @model_validator(mode="after")
+    def message_not_blank(self):
+        self.message = self.message.strip()
+        if not self.message:
+            raise ValueError("Feedback haiwezi kuwa tupu")
+        return self
+
 class AuthResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -63,6 +81,29 @@ class PropertyResponse(BaseModel):
     status: PropertyStatus
     created_at: datetime
     expires_at: datetime | None
+    favorites_count: int = 0
+    unread_messages_count: int = 0
+class PropertyUpdate(BaseModel):
+    """Sehemu zinazoruhusiwa kuhaririwa na mwenye tangazo (seller) baada
+    ya kuweka tangazo lake. Picha na hati ya uthibitisho HAZIBADILISHWI
+    hapa - ni za kudumu tangu kuunda tangazo. Field zote ni hiari (Optional)
+    ili PATCH iweze kutuma sehemu tu zilizobadilika."""
+    jina: str | None = Field(default=None, min_length=2, max_length=180)
+    aina: PropertyType | None = None
+    mode: PropertyMode | None = None
+    price: int | None = Field(default=None, ge=0)
+    location_label: str | None = Field(default=None, min_length=1, max_length=180)
+    latitude: float | None = None
+    longitude: float | None = None
+    has_wifi: bool | None = None
+    car_parking: bool | None = None
+    indoor_toilet: bool | None = None
+    has_electricity: bool | None = None
+    water_inside: bool | None = None
+    water_nearby: bool | None = None
+    furnished: bool | None = None
+    swimming_pool: bool | None = None
+    description: str | None = Field(default=None, min_length=1)
 class PublicPropertyResponse(BaseModel):
     """Response ya public - HAINA verification_doc_url.
     TUMIA HII kwa endpoints zozote zinazoweza kufikiwa na buyer/umma
@@ -131,3 +172,28 @@ class MessageResponse(BaseModel):
     content: str
     created_at: datetime
     read_at: datetime | None
+class ConversationResponse(BaseModel):
+    """Kikundi cha mazungumzo (thread) kati ya mtumiaji na mtu mwingine
+    kuhusu tangazo maalum - kinatumika kwenye 'inbox' ya mpangishaji/mnunuzi
+    kuonyesha ujumbe wa hivi karibuni na idadi ya ujumbe usiosomwa."""
+    property_id: int
+    property_name: str
+    other_user_id: int
+    other_user_name: str
+    last_message: str
+    last_message_at: datetime
+    last_sender_id: int
+    unread_count: int
+class NotificationResponse(BaseModel):
+    """Arifa moja iliyoungalishwa - inaweza kutoka kwa platform yenyewe
+    (type='platform') au kuwa muhtasari wa mazungumzo na mmiliki wa
+    nyumba / mnunuzi (type='owner')."""
+    id: str
+    type: str
+    title: str
+    body: str
+    created_at: datetime
+    read: bool
+    property_id: int | None = None
+    property_name: str | None = None
+    other_user_id: int | None = None

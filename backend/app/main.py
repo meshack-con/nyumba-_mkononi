@@ -5,25 +5,33 @@ from uuid import uuid4
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
+
+import cloudinary
+import cloudinary.uploader
 
 from .admin import router as admin_router
 from .auth import create_access_token, get_current_user, hash_password, verify_password
 from .database import Base, engine, get_db, settings
-from .models import Favorite, LoginEvent, Message, Property, PropertyMode, PropertyStatus, PropertyType, User, UserRole
+from .models import Feedback, Favorite, LoginEvent, Message, Notification, Property, PropertyMode, PropertyStatus, PropertyType, User, UserRole
 from .schemas import (
     AuthResponse,
+    ConversationResponse,
+    FeedbackCreate,
     FavoriteResponse,
     LoginRequest,
     MessageCreate,
     MessageResponse,
+    NotificationResponse,
     PropertyResponse,
+    PropertyUpdate,
     PropertyWithOwnerResponse,
     PublicPropertyResponse,
     UserCreate,
     UserResponse,
+    UserUpdate,
 )
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -33,6 +41,13 @@ UPLOADS_DIR.mkdir(exist_ok=True)
 app = FastAPI(title="Nyumba Mkononi API", version="1.0.0")
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 app.include_router(admin_router)
+
+cloudinary.config(
+    cloud_name=settings.cloudinary_cloud_name,
+    api_key=settings.cloudinary_api_key,
+    api_secret=settings.cloudinary_api_secret,
+    secure=True,
+)
 
 origins = [origin.strip() for origin in settings.cors_origins.split(",") if origin.strip()]
 app.add_middleware(
@@ -46,7 +61,17 @@ app.add_middleware(
 
 @app.on_event("startup")
 def create_tables() -> None:
+    # `create_all` inaunda majedwali MAPYA tu (mfano `notifications`) - haiwezi
+    # kuongeza column mpya kwenye jedwali `users` ambalo tayari lipo kwenye
+    # database ya production. Kwa hiyo tunaongeza column hiyo wenyewe hapa,
+    # kwa amri isiyo na madhara ikiwa tayari ipo (IF NOT EXISTS) - inafanya
+    # kazi salama kila mara app inapoanza, bila hatua yoyote ya mkono kwenye
+    # server halisi.
     Base.metadata.create_all(bind=engine)
+    with engine.begin() as connection:
+        connection.execute(text(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_picha_url VARCHAR(500)"
+        ))
 
 
 def ensure_seller(user: User) -> None:
@@ -80,12 +105,15 @@ async def save_upload(upload: UploadFile, folder: str) -> str:
     allowed_extensions = {".jpg", ".jpeg", ".png", ".webp", ".pdf"}
     if extension not in allowed_extensions:
         raise HTTPException(status_code=400, detail="Aina ya file hairuhusiwi")
-    target_dir = UPLOADS_DIR / folder
-    target_dir.mkdir(exist_ok=True)
-    filename = f"{uuid4().hex}{extension}"
-    target = target_dir / filename
-    target.write_bytes(await upload.read())
-    return f"/uploads/{folder}/{filename}"
+    contents = await upload.read()
+    resource_type = "raw" if extension == ".pdf" else "image"
+    result = cloudinary.uploader.upload(
+        contents,
+        folder=f"nyumba_mkononi/{folder}",
+        resource_type=resource_type,
+        public_id=uuid4().hex,
+    )
+    return result["secure_url"]
 
 
 @app.post("/auth/register", response_model=AuthResponse, status_code=201)
@@ -108,6 +136,12 @@ def register(payload: UserCreate, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=409, detail="Username tayari ipo") from None
     db.refresh(user)
+    db.add(Notification(
+        user_id=user.id,
+        title="Karibu Nyumba Mkononi!",
+        body=f"Habari {user.jina_kamili}, akaunti yako imefunguliwa kikamilifu. Karibu utafute au utangaze nyumba.",
+    ))
+    db.commit()
     return AuthResponse(access_token=create_access_token(user), user=user)
 
 
@@ -119,6 +153,58 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     db.add(LoginEvent(user_id=user.id, role=user.role))
     db.commit()
     return AuthResponse(access_token=create_access_token(user), user=user)
+
+
+# --- Taarifa binafsi za mtumiaji aliyeautheticate (wasifu) --------------
+
+@app.get("/auth/me", response_model=UserResponse)
+def get_me(current_user: User = Depends(get_current_user)):
+    """Taarifa zote binafsi za mtumiaji, kama alivyoziingiza wakati wa
+    usajili, kwa ajili ya sehemu ya 'Taarifa binafsi' kwenye wasifu."""
+    return current_user
+
+
+@app.patch("/auth/me", response_model=UserResponse)
+def update_me(payload: UserUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Mtumiaji anahariri taarifa zake binafsi (jina, simu, email, eneo)."""
+    data = payload.model_dump(exclude_unset=True)
+    if "jina_kamili" in data and data["jina_kamili"] is not None:
+        current_user.jina_kamili = data["jina_kamili"]
+    if "namba_ya_simu" in data and data["namba_ya_simu"] is not None:
+        current_user.namba_ya_simu = data["namba_ya_simu"]
+    if "email" in data:
+        current_user.email = str(data["email"]) if data["email"] else None
+    if "eneo" in data:
+        current_user.eneo = data["eneo"]
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@app.post("/auth/me/photo", response_model=UserResponse)
+async def update_my_photo(
+    photo: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Mtumiaji anapakia/anabadilisha profile picha yake."""
+    photo_url = await save_upload(photo, "profile-pictures")
+    current_user.profile_picha_url = photo_url
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@app.post("/feedback", status_code=201)
+def create_feedback(
+    payload: FeedbackCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    feedback = Feedback(user_id=current_user.id, message=payload.message)
+    db.add(feedback)
+    db.commit()
+    return {"message": "Maoni yamepokelewa"}
 
 
 # --- Public-facing property endpoints ---------------------------------
@@ -299,6 +385,64 @@ def get_messages(
     return messages
 
 
+# --- Inbox ya mazungumzo (kwa mpangishaji/mnunuzi kuona ujumbe wote) ----
+# Inarudisha "threads" - kikundi kimoja kwa kila (tangazo, mtu mwingine) -
+# kikiwa na ujumbe wa mwisho na idadi ya usiosomwa. Hii ndiyo "taarifa za
+# kweli" mpangishaji anazoziona kuhusu ujumbe unaomsubiri.
+
+def _conversation_threads(current_user: User, db: Session) -> list[dict]:
+    """Muhtasari wa mazungumzo ya mtumiaji, kimoja kwa kila (tangazo, mtu
+    mwingine) - kinatumika kwenye inbox ya ujumbe NA kwenye /notifications
+    (kama 'arifa kutoka kwa mmiliki wa nyumba')."""
+    query = (
+        select(Message)
+        .options(joinedload(Message.sender), joinedload(Message.receiver), joinedload(Message.property))
+        .where(or_(Message.sender_id == current_user.id, Message.receiver_id == current_user.id))
+        .order_by(Message.created_at.asc())
+    )
+    messages = list(db.scalars(query).unique().all())
+    threads: dict[tuple[int, int], dict] = {}
+    for message in messages:
+        other = message.receiver if message.sender_id == current_user.id else message.sender
+        key = (message.property_id, other.id)
+        thread = threads.get(key)
+        if thread is None:
+            thread = {
+                "property_id": message.property_id,
+                "property_name": message.property.jina if message.property else "",
+                "other_user_id": other.id,
+                "other_user_name": other.jina_kamili,
+                "last_message": message.content,
+                "last_message_at": message.created_at,
+                "last_sender_id": message.sender_id,
+                "unread_count": 0,
+            }
+            threads[key] = thread
+        else:
+            thread["last_message"] = message.content
+            thread["last_message_at"] = message.created_at
+            thread["last_sender_id"] = message.sender_id
+        if message.receiver_id == current_user.id and message.read_at is None:
+            thread["unread_count"] += 1
+    return sorted(threads.values(), key=lambda item: item["last_message_at"], reverse=True)
+
+
+@app.get("/messages/conversations", response_model=list[ConversationResponse])
+def list_conversations(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return _conversation_threads(current_user, db)
+
+
+@app.delete("/messages/{message_id}", status_code=204)
+def delete_message(message_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    message = db.get(Message, message_id)
+    if message is None:
+        raise HTTPException(status_code=404, detail="Ujumbe haukupatikani")
+    if current_user.id not in (message.sender_id, message.receiver_id):
+        raise HTTPException(status_code=403, detail="Huna ruhusa kufuta ujumbe huu")
+    db.delete(message)
+    db.commit()
+
+
 # --- Seller-only property endpoints ------------------------------------
 # Hizi zinatumia PropertyResponse kamili (INA verification_doc_url)
 # kwa sababu ni seller mwenyewe, aliyeauthenticate, akiona taarifa zake.
@@ -365,8 +509,95 @@ def list_my_properties(
     db: Session = Depends(get_db),
 ):
     ensure_seller(current_user)
-    query = select(Property).where(Property.owner_id == current_user.id).order_by(Property.created_at.desc())
-    return list(db.scalars(query).all())
+    # Idadi ya "like" (favorites) kwa kila tangazo, na idadi ya ujumbe
+    # usiosomwa uliopokelewa na mpangishaji kwa kila tangazo - hivi
+    # ndivyo "notifications za kweli" anazoziona kwenye dashibodi yake.
+    fav_count_subq = (
+        select(Favorite.property_id, func.count(Favorite.id).label("fav_count"))
+        .group_by(Favorite.property_id)
+        .subquery()
+    )
+    unread_subq = (
+        select(Message.property_id, func.count(Message.id).label("unread_count"))
+        .where(Message.receiver_id == current_user.id, Message.read_at.is_(None))
+        .group_by(Message.property_id)
+        .subquery()
+    )
+    query = (
+        select(
+            Property,
+            func.coalesce(fav_count_subq.c.fav_count, 0),
+            func.coalesce(unread_subq.c.unread_count, 0),
+        )
+        .outerjoin(fav_count_subq, fav_count_subq.c.property_id == Property.id)
+        .outerjoin(unread_subq, unread_subq.c.property_id == Property.id)
+        .where(Property.owner_id == current_user.id)
+        .order_by(Property.created_at.desc())
+    )
+    results: list[PropertyResponse] = []
+    for property_item, fav_count, unread_count in db.execute(query).all():
+        data = PropertyResponse.model_validate(property_item).model_dump()
+        data["favorites_count"] = fav_count
+        data["unread_messages_count"] = unread_count
+        results.append(PropertyResponse(**data))
+    return results
+
+
+def _get_own_property(property_id: int, current_user: User, db: Session) -> Property:
+    """Inapata tangazo kwa ID na kuhakikisha ni la mwenye tangazo mwenyewe
+    (seller aliyeautheticate) - vinginevyo 404 (siyo 403, ili tusifichue
+    kuwepo kwa tangazo la mtu mwingine)."""
+    ensure_seller(current_user)
+    property_item = db.get(Property, property_id)
+    if property_item is None or property_item.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Tangazo halipatikani")
+    return property_item
+
+
+@app.patch("/properties/{property_id}", response_model=PropertyResponse)
+def update_my_property(
+    property_id: int,
+    payload: PropertyUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Mwenye tangazo (seller) anahariri taarifa za tangazo lake mwenyewe -
+    jina, bei, maelezo, huduma zilizopo na eneo. Picha na hati ya
+    uthibitisho hazibadilishwi hapa (ni za kudumu tangu kuunda tangazo)."""
+    property_item = _get_own_property(property_id, current_user, db)
+    data = payload.model_dump(exclude_unset=True)
+    for field, value in data.items():
+        setattr(property_item, field, value)
+    db.commit()
+    db.refresh(property_item)
+    # Rudisha na idadi za favorites/unread halisi, kama vile /properties/mine,
+    # ili UI ya dashibodi isionyeshe 0 baada ya kuhariri.
+    fav_count = db.scalar(select(func.count(Favorite.id)).where(Favorite.property_id == property_item.id)) or 0
+    unread_count = db.scalar(
+        select(func.count(Message.id)).where(
+            Message.property_id == property_item.id,
+            Message.receiver_id == current_user.id,
+            Message.read_at.is_(None),
+        )
+    ) or 0
+    result = PropertyResponse.model_validate(property_item).model_dump()
+    result["favorites_count"] = fav_count
+    result["unread_messages_count"] = unread_count
+    return PropertyResponse(**result)
+
+
+@app.delete("/properties/{property_id}", status_code=204)
+def delete_my_property(
+    property_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Mwenye tangazo (seller) anafuta tangazo lake mwenyewe kabisa kutoka
+    kwenye mfumo (favorites na messages zinazohusiana zinafutika pia -
+    cascade). Hatua ya kudumu, haiwezi kutendulika."""
+    property_item = _get_own_property(property_id, current_user, db)
+    db.delete(property_item)
+    db.commit()
 
 
 # --- Favorites -----------------------------------------------------------
@@ -405,6 +636,76 @@ def remove_favorite(property_id: int, current_user: User = Depends(get_current_u
         raise HTTPException(status_code=404, detail="Favorite haikupatikana")
     db.delete(favorite)
     db.commit()
+
+
+# --- Arifa (notifications) ----------------------------------------------
+# Inaunganisha aina mbili za arifa kwenye orodha moja: (1) arifa za
+# 'platform' (mfano: tangazo limeruhusiwa/limekataliwa, karibu) kutoka
+# kwenye jedwali la Notification, na (2) muhtasari wa ujumbe kutoka kwa
+# mmiliki wa nyumba / mnunuzi (conversations) - hivi ndivyo mtumiaji
+# anavyoona "Arifa" zote kwenye sehemu ya wasifu.
+
+@app.get("/notifications", response_model=list[NotificationResponse])
+def list_notifications(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    items: list[NotificationResponse] = []
+
+    platform_rows = db.scalars(
+        select(Notification)
+        .where(Notification.user_id == current_user.id)
+        .order_by(Notification.created_at.desc())
+    ).all()
+    for row in platform_rows:
+        items.append(NotificationResponse(
+            id=f"platform-{row.id}",
+            type="platform",
+            title=row.title,
+            body=row.body,
+            created_at=row.created_at,
+            read=row.read_at is not None,
+            property_id=row.property_id,
+        ))
+
+    for thread in _conversation_threads(current_user, db):
+        items.append(NotificationResponse(
+            id=f"owner-{thread['property_id']}-{thread['other_user_id']}",
+            type="owner",
+            title=f"Ujumbe kutoka kwa {thread['other_user_name']}",
+            body=thread["last_message"],
+            created_at=thread["last_message_at"],
+            read=thread["unread_count"] == 0,
+            property_id=thread["property_id"],
+            property_name=thread["property_name"],
+            other_user_id=thread["other_user_id"],
+        ))
+
+    items.sort(key=lambda item: item.created_at, reverse=True)
+    return items
+
+
+@app.post("/notifications/{notification_id}/read", response_model=NotificationResponse)
+def mark_notification_read(notification_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if not notification_id.startswith("platform-"):
+        raise HTTPException(status_code=400, detail="Arifa za ujumbe zinasomwa kwa kufungua mazungumzo husika")
+    try:
+        real_id = int(notification_id.split("-", 1)[1])
+    except (IndexError, ValueError):
+        raise HTTPException(status_code=400, detail="ID ya arifa si sahihi") from None
+    row = db.get(Notification, real_id)
+    if row is None or row.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Arifa haikupatikana")
+    if row.read_at is None:
+        row.read_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(row)
+    return NotificationResponse(
+        id=f"platform-{row.id}",
+        type="platform",
+        title=row.title,
+        body=row.body,
+        created_at=row.created_at,
+        read=row.read_at is not None,
+        property_id=row.property_id,
+    )
 
 
 @app.get("/health")

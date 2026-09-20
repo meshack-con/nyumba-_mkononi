@@ -5,7 +5,9 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/conversation.dart';
 import '../models/message.dart';
+import '../models/notification_item.dart';
 import '../models/property.dart';
 import '../models/property_contact.dart';
 import '../models/user.dart';
@@ -125,6 +127,26 @@ class ApiClient {
     return ChatMessage.fromJson(await _decode(response) as Map<String, dynamic>);
   }
 
+  Future<List<ConversationThread>> getConversations() async {
+    final response = await http.get(Uri.parse('$apiBaseUrl/messages/conversations'), headers: await _headers(authenticated: true));
+    final data = await _decode(response) as List<dynamic>;
+    return data.map((item) => ConversationThread.fromJson(item as Map<String, dynamic>)).toList();
+  }
+
+  Future<int> getUnreadMessagesCount() async {
+    try {
+      final threads = await getConversations();
+      return threads.fold<int>(0, (sum, thread) => sum + thread.unreadCount);
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  Future<void> deleteMessage(int messageId) async {
+    final response = await http.delete(Uri.parse('$apiBaseUrl/messages/$messageId'), headers: await _headers(authenticated: true));
+    await _decode(response);
+  }
+
   Future<List<FavoriteItem>> getFavorites() async {
     final response = await http.get(Uri.parse('$apiBaseUrl/favorites'), headers: await _headers(authenticated: true));
     final data = await _decode(response) as List<dynamic>;
@@ -181,6 +203,65 @@ class ApiClient {
     return AppUser.fromJson(data['user'] as Map<String, dynamic>);
   }
 
+  Future<AppUser> getMe() async {
+    final response = await http.get(Uri.parse('$apiBaseUrl/auth/me'), headers: await _headers(authenticated: true));
+    return AppUser.fromJson(await _decode(response) as Map<String, dynamic>);
+  }
+
+  Future<void> sendFeedback(String message) async {
+    final headers = await _headers(authenticated: true);
+    headers['Content-Type'] = 'application/json';
+    final response = await http.post(
+      Uri.parse('$apiBaseUrl/feedback'),
+      headers: headers,
+      body: jsonEncode({'message': message}),
+    );
+    await _decode(response);
+  }
+
+  Future<AppUser> updateMe({
+    String? fullName,
+    String? phone,
+    String? email,
+    String? area,
+  }) async {
+    final headers = await _headers(authenticated: true);
+    headers['Content-Type'] = 'application/json';
+    final body = <String, dynamic>{};
+    if (fullName != null) body['jina_kamili'] = fullName;
+    if (phone != null) body['namba_ya_simu'] = phone;
+    if (email != null) body['email'] = email.isEmpty ? null : email;
+    if (area != null) body['eneo'] = area.isEmpty ? null : area;
+    final response = await http.patch(
+      Uri.parse('$apiBaseUrl/auth/me'),
+      headers: headers,
+      body: jsonEncode(body),
+    );
+    return AppUser.fromJson(await _decode(response) as Map<String, dynamic>);
+  }
+
+  Future<AppUser> updateMyPhoto(Uint8List bytes, String filename) async {
+    final request = http.MultipartRequest('POST', Uri.parse('$apiBaseUrl/auth/me/photo'));
+    request.headers.addAll(await _headers(authenticated: true));
+    request.files.add(http.MultipartFile.fromBytes('photo', bytes, filename: filename));
+    final response = await http.Response.fromStream(await request.send());
+    return AppUser.fromJson(await _decode(response) as Map<String, dynamic>);
+  }
+
+  Future<List<NotificationItem>> getNotifications() async {
+    final response = await http.get(Uri.parse('$apiBaseUrl/notifications'), headers: await _headers(authenticated: true));
+    final data = await _decode(response) as List<dynamic>;
+    return data.map((item) => NotificationItem.fromJson(item as Map<String, dynamic>)).toList();
+  }
+
+  Future<void> markNotificationRead(String notificationId) async {
+    final response = await http.post(
+      Uri.parse('$apiBaseUrl/notifications/$notificationId/read'),
+      headers: await _headers(authenticated: true),
+    );
+    await _decode(response);
+  }
+
   Future<List<Property>> getMyProperties() async {
     final response = await http.get(Uri.parse('$apiBaseUrl/properties/mine'), headers: await _headers(authenticated: true));
     final data = await _decode(response) as List<dynamic>;
@@ -235,6 +316,58 @@ class ApiClient {
     request.files.add(http.MultipartFile.fromBytes('verification_doc', verificationDoc, filename: verificationDocName));
     final response = await http.Response.fromStream(await request.send());
     return Property.fromJson(await _decode(response) as Map<String, dynamic>);
+  }
+
+  Future<Property> updateProperty({
+    required int id,
+    String? name,
+    String? type,
+    String? mode,
+    int? price,
+    String? locationLabel,
+    double? latitude,
+    double? longitude,
+    bool? hasWifi,
+    bool? carParking,
+    bool? indoorToilet,
+    bool? hasElectricity,
+    bool? waterInside,
+    bool? waterNearby,
+    bool? furnished,
+    bool? swimmingPool,
+    String? description,
+  }) async {
+    final headers = await _headers(authenticated: true);
+    headers['Content-Type'] = 'application/json';
+    final body = <String, dynamic>{
+      if (name != null) 'jina': name,
+      if (type != null) 'aina': type,
+      if (mode != null) 'mode': mode,
+      if (price != null) 'price': price,
+      if (locationLabel != null) 'location_label': locationLabel,
+      if (latitude != null) 'latitude': latitude,
+      if (longitude != null) 'longitude': longitude,
+      if (hasWifi != null) 'has_wifi': hasWifi,
+      if (carParking != null) 'car_parking': carParking,
+      if (indoorToilet != null) 'indoor_toilet': indoorToilet,
+      if (hasElectricity != null) 'has_electricity': hasElectricity,
+      if (waterInside != null) 'water_inside': waterInside,
+      if (waterNearby != null) 'water_nearby': waterNearby,
+      if (furnished != null) 'furnished': furnished,
+      if (swimmingPool != null) 'swimming_pool': swimmingPool,
+      if (description != null) 'description': description,
+    };
+    final response = await http.patch(
+      Uri.parse('$apiBaseUrl/properties/$id'),
+      headers: headers,
+      body: jsonEncode(body),
+    );
+    return Property.fromJson(await _decode(response) as Map<String, dynamic>);
+  }
+
+  Future<void> deleteProperty(int id) async {
+    final response = await http.delete(Uri.parse('$apiBaseUrl/properties/$id'), headers: await _headers(authenticated: true));
+    await _decode(response);
   }
 
   String assetUrl(String path) => path.startsWith('http') ? path : '$apiBaseUrl$path';
