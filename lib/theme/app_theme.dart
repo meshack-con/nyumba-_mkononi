@@ -1,9 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import 'theme_controller.dart';
+
 class AppTheme {
-  static const primary = Color(0xFF9C2C50);
-  static const primaryContainer = Color(0xFFC24571);
+  // Rangi kuu (zinabadilika kulingana na chaguo la mtumiaji).
+  static Color get primary => ThemeController.instance.accent.primary;
+  static Color get primaryContainer => ThemeController.instance.accent.container;
+
+  /// Toleo jepesi la rangi kuu kwa maandishi na aikoni kwenye dark mode.
+  static Color get darkAccent {
+    final hsl = HSLColor.fromColor(primary);
+    return hsl
+        .withLightness(0.70)
+        .withSaturation(hsl.saturation.clamp(0.0, 0.85))
+        .toColor();
+  }
+
   static const surface = Color(0xFFF8F9FA);
   static const surfaceLow = Color(0xFFF3F4F5);
   static const navy = Color(0xFF1A1A2E);
@@ -16,12 +29,11 @@ class AppTheme {
   static const darkCard = Color(0xFF1E1E2A);
   static const darkText = Color(0xFFF1F1F5);
   static const darkMuted = Color(0xFFCDBDC1);
-  static const darkAccent = Color(0xFFE57399);
   static const darkSuccess = Color(0xFF6FDC8C);
 
   // Compatibility aliases used by the existing screens.
   static const ink = navy;
-  static const coral = primary;
+  static Color get coral => primary;
   static const cream = surface;
   static const sand = surfaceLow;
   static const mint = Color(0xFFE6F4EA);
@@ -37,15 +49,17 @@ class AppTheme {
     final text = isDark ? darkText : navy;
     final variant = isDark ? darkMuted : muted;
     final accent = isDark ? darkAccent : primary;
+    final main = primary;
+    final container = primaryContainer;
 
     final base = ThemeData(useMaterial3: true, brightness: brightness);
     final scheme = isDark
         ? ColorScheme.dark(
             primary: accent,
             onPrimary: Colors.white,
-            primaryContainer: primaryContainer,
+            primaryContainer: container,
             onPrimaryContainer: Colors.white,
-            secondary: primaryContainer,
+            secondary: container,
             onSecondary: Colors.white,
             surface: bg,
             onSurface: text,
@@ -53,18 +67,18 @@ class AppTheme {
             onSurfaceVariant: variant,
             error: const Color(0xFFFFB4AB),
           )
-        : const ColorScheme.light(
-            primary: primary,
+        : ColorScheme.light(
+            primary: main,
             onPrimary: Colors.white,
-            primaryContainer: primaryContainer,
+            primaryContainer: container,
             onPrimaryContainer: Colors.white,
-            secondary: primaryContainer,
+            secondary: container,
             onSecondary: Colors.white,
             surface: surface,
             onSurface: navy,
             surfaceContainerLow: surfaceLow,
             onSurfaceVariant: muted,
-            error: Color(0xFFBA1A1A),
+            error: const Color(0xFFBA1A1A),
           );
 
     return base.copyWith(
@@ -86,7 +100,7 @@ class AppTheme {
       iconTheme: IconThemeData(color: text),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: card,
-        indicatorColor: primary,
+        indicatorColor: main,
         indicatorShape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(18),
         ),
@@ -99,8 +113,8 @@ class AppTheme {
       ),
       chipTheme: ChipThemeData(
         backgroundColor: card,
-        selectedColor: primary,
-        secondarySelectedColor: primaryContainer,
+        selectedColor: main,
+        secondarySelectedColor: container,
         side: BorderSide(color: accent),
         labelStyle: TextStyle(color: text, fontWeight: FontWeight.w700),
         secondaryLabelStyle:
@@ -137,7 +151,7 @@ class AppTheme {
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: primary,
+          backgroundColor: main,
           foregroundColor: Colors.white,
           minimumSize: const Size.fromHeight(52),
           shape:
@@ -147,7 +161,7 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: primary,
+          backgroundColor: main,
           foregroundColor: Colors.white,
           minimumSize: const Size.fromHeight(52),
           shape:
@@ -180,7 +194,7 @@ class AppTheme {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
-        backgroundColor: primary,
+        backgroundColor: main,
         foregroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       ),
