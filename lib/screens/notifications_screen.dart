@@ -139,7 +139,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                             trailing: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end, children: [
                               Text(_formatWhen(item.createdAt), style: const TextStyle(fontSize: 11, color: AppTheme.muted)),
                               const SizedBox(height: 6),
-                              if (unread) Container(width: 9, height: 9, decoration: const BoxDecoration(color: AppTheme.primary, shape: BoxShape.circle)),
+                              if (unread) Container(width: 9, height: 9, decoration: BoxDecoration(color: AppTheme.primary, shape: BoxShape.circle)),
                             ]),
                           );
                         },

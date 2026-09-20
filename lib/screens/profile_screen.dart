@@ -87,13 +87,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const _SectionLabel('AKAUNTI'),
         _ProfileTile(icon: Icons.person_outline_rounded, title: 'Taarifa binafsi', onTap: _openPersonalInfo),
         _ProfileTile(icon: Icons.notifications_none_rounded, title: 'Arifa', onTap: _openNotifications),
-        _ProfileTile(icon: Icons.account_balance_wallet_outlined, title: 'Toa pesa', onTap: () => _showMessage('Malipo yataonekana hapa.')),
         _ProfileTile(icon: Icons.language_rounded, title: 'Lugha', onTap: () => _showMessage('Kiswahili')),
         const SizedBox(height: 24),
         const _SectionLabel('MSAADA'),
         _ProfileTile(icon: Icons.help_outline_rounded, title: 'Kituo cha msaada', onTap: () => _showMessage('Timu yetu itakusaidia hivi karibuni.')),
         _ProfileTile(icon: Icons.logout_rounded, title: _signedIn ? 'Toka' : 'Ingia', danger: _signedIn, onTap: _signedIn ? _signOut : _openAuth),
-        if (_signedIn) _ProfileTile(icon: Icons.delete_outline_rounded, title: 'Futa akaunti', danger: true, onTap: () => _showMessage('Tafadhali wasiliana na msaada.')),
       ],
     );
   }
