@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'l10n/locale_controller.dart';
 import 'screens/splash_screen.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_controller.dart';
@@ -7,6 +8,7 @@ import 'theme/theme_controller.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await ThemeController.instance.load();
+  await LocaleController.instance.load();
   runApp(const NyumbaMkononiApp());
 }
 

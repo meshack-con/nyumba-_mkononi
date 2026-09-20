@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/app_strings.dart';
+import '../l10n/locale_controller.dart';
 import '../models/user.dart';
 import '../services/api_client.dart';
+import '../services/feedback_service.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
 import 'auth_screen.dart';
@@ -44,6 +47,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final s = AppStrings.t;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return ListView(
       padding: EdgeInsets.fromLTRB(20, MediaQuery.paddingOf(context).top + 28, 20, 32),
@@ -64,7 +68,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 18),
         Center(
           child: Text(
-            _signedIn ? (_user?.fullName ?? 'Mwanachama wa Nyumba Mkononi') : 'Mgeni',
+            _signedIn ? (_user?.fullName ?? s('member')) : s('guest'),
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
           ),
@@ -72,26 +76,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
         const SizedBox(height: 8),
         Center(
           child: Text(
-            _signedIn ? 'Akaunti yako iko tayari' : 'Ingia ili kuhifadhi nyumba na kuwasiliana',
+            _signedIn ? s('accountReady') : s('signInPrompt'),
             textAlign: TextAlign.center,
             style: TextStyle(color: isDark ? AppTheme.darkSuccess : AppTheme.success),
           ),
         ),
         const SizedBox(height: 32),
-        const _SectionLabel('MUONEKANO'),
+        _SectionLabel(s('appearance')),
         const _ThemeSelector(),
-        const SizedBox(height: 24),
-        const _SectionLabel('RANGI KUU'),
+        const SizedBox(height: 16),
+        _SectionLabel(s('primaryColor')),
         const _AccentSelector(),
         const SizedBox(height: 24),
-        const _SectionLabel('AKAUNTI'),
-        _ProfileTile(icon: Icons.person_outline_rounded, title: 'Taarifa binafsi', onTap: _openPersonalInfo),
-        _ProfileTile(icon: Icons.notifications_none_rounded, title: 'Arifa', onTap: _openNotifications),
-        _ProfileTile(icon: Icons.language_rounded, title: 'Lugha', onTap: () => _showMessage('Kiswahili')),
+        _SectionLabel(s('account')),
+        _ProfileTile(icon: Icons.person_outline_rounded, title: s('personalInfo'), onTap: _openPersonalInfo),
+        _ProfileTile(icon: Icons.notifications_none_rounded, title: s('notifications'), onTap: _openNotifications),
+        _ProfileTile(
+          icon: Icons.language_rounded,
+          title: s('language'),
+          subtitle: LocaleController.instance.currentName,
+          onTap: _chooseLanguage,
+        ),
+        _ProfileTile(
+          icon: Icons.logout_rounded,
+          title: _signedIn ? s('signOut') : s('signIn'),
+          danger: _signedIn,
+          onTap: _signedIn ? _signOut : _openAuth,
+        ),
         const SizedBox(height: 24),
-        const _SectionLabel('MSAADA'),
-        _ProfileTile(icon: Icons.help_outline_rounded, title: 'Kituo cha msaada', onTap: () => _showMessage('Timu yetu itakusaidia hivi karibuni.')),
-        _ProfileTile(icon: Icons.logout_rounded, title: _signedIn ? 'Toka' : 'Ingia', danger: _signedIn, onTap: _signedIn ? _signOut : _openAuth),
+        _SectionLabel(s('feedbackSection')),
+        _ProfileTile(
+          icon: Icons.feedback_outlined,
+          title: s('feedback'),
+          subtitle: s('feedbackSubtitle'),
+          onTap: _openFeedback,
+        ),
       ],
     );
   }
@@ -122,14 +141,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _signOut() async {
     await ApiClient.instance.clearSession();
-    if (mounted) setState(() {
-      _signedIn = false;
-      _user = null;
-    });
+    if (mounted) {
+      setState(() {
+        _signedIn = false;
+        _user = null;
+      });
+    }
   }
 
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  Future<void> _chooseLanguage() async {
+    final controller = LocaleController.instance;
+    final code = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                AppStrings.t('chooseLanguage'),
+                style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+              ),
+            ),
+            for (final option in LocaleController.languages)
+              ListTile(
+                title: Text(option.name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                trailing: option.code == controller.code
+                    ? Icon(Icons.check_rounded, color: Theme.of(sheetContext).colorScheme.primary)
+                    : null,
+                onTap: () => Navigator.pop(sheetContext, option.code),
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+    if (code != null) await controller.setLanguage(code);
+  }
+
+  Future<void> _openFeedback() async {
+    final sent = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => const _FeedbackSheet(),
+    );
+    if (sent == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppStrings.t('feedbackThanks'))),
+      );
+    }
   }
 }
 
@@ -150,67 +211,63 @@ class _SectionLabel extends StatelessWidget {
       );
 }
 
+/// Kichwa "Theme" chenye vitufe vya White / Dark ndani yake.
 class _ThemeSelector extends StatelessWidget {
   const _ThemeSelector();
 
   @override
   Widget build(BuildContext context) {
     final controller = ThemeController.instance;
+    final scheme = Theme.of(context).colorScheme;
     return ListenableBuilder(
       listenable: controller,
       builder: (context, _) => Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-        child: SizedBox(
-          width: double.infinity,
-          child: SegmentedButton<ThemeMode>(
-            showSelectedIcon: false,
-            style: SegmentedButton.styleFrom(
-              selectedBackgroundColor: AppTheme.primary,
-              selectedForegroundColor: Colors.white,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                CircleAvatar(
+                  backgroundColor: scheme.surfaceContainerLow,
+                  foregroundColor: scheme.onSurface,
+                  child: const Icon(Icons.brightness_6_outlined),
+                ),
+                const SizedBox(width: 16),
+                Text(
+                  AppStrings.t('theme'),
+                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+                ),
+              ],
             ),
-            segments: const [
-              ButtonSegment(
-                value: ThemeMode.light,
-                icon: Icon(Icons.light_mode_outlined),
-                label: Text('Nyeupe'),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<ThemeMode>(
+                showSelectedIcon: false,
+                style: SegmentedButton.styleFrom(
+                  selectedBackgroundColor: AppTheme.primary,
+                  selectedForegroundColor: Colors.white,
+                ),
+                segments: [
+                  ButtonSegment(
+                    value: ThemeMode.light,
+                    icon: const Icon(Icons.light_mode_outlined),
+                    label: Text(AppStrings.t('white')),
+                  ),
+                  ButtonSegment(
+                    value: ThemeMode.dark,
+                    icon: const Icon(Icons.dark_mode_outlined),
+                    label: Text(AppStrings.t('dark')),
+                  ),
+                ],
+                selected: {controller.mode},
+                onSelectionChanged: (selection) => controller.setMode(selection.first),
               ),
-              ButtonSegment(
-                value: ThemeMode.dark,
-                icon: Icon(Icons.dark_mode_outlined),
-                label: Text('Giza'),
-              ),
-            ],
-            selected: {controller.mode},
-            onSelectionChanged: (selection) => controller.setMode(selection.first),
-          ),
+            ),
+          ],
         ),
       ),
-    );
-  }
-}
-
-class _ProfileTile extends StatelessWidget {
-  const _ProfileTile({required this.icon, required this.title, required this.onTap, this.danger = false});
-  final IconData icon;
-  final String title;
-  final VoidCallback onTap;
-  final bool danger;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final dangerColor = isDark ? Colors.red.shade300 : Colors.red;
-    return ListTile(
-      onTap: onTap,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-      leading: CircleAvatar(
-        backgroundColor: danger ? dangerColor.withAlpha(30) : scheme.surfaceContainerLow,
-        foregroundColor: danger ? dangerColor : scheme.onSurface,
-        child: Icon(icon),
-      ),
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-      trailing: const Icon(Icons.chevron_right_rounded),
     );
   }
 }
@@ -288,6 +345,123 @@ class _AccentDot extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _ProfileTile extends StatelessWidget {
+  const _ProfileTile({
+    required this.icon,
+    required this.title,
+    required this.onTap,
+    this.subtitle,
+    this.danger = false,
+  });
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final VoidCallback onTap;
+  final bool danger;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final dangerColor = isDark ? Colors.red.shade300 : Colors.red;
+    return ListTile(
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      leading: CircleAvatar(
+        backgroundColor: danger ? dangerColor.withAlpha(30) : scheme.surfaceContainerLow,
+        foregroundColor: danger ? dangerColor : scheme.onSurface,
+        child: Icon(icon),
+      ),
+      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+      subtitle: subtitle == null ? null : Text(subtitle!),
+      trailing: const Icon(Icons.chevron_right_rounded),
+    );
+  }
+}
+
+class _FeedbackSheet extends StatefulWidget {
+  const _FeedbackSheet();
+
+  @override
+  State<_FeedbackSheet> createState() => _FeedbackSheetState();
+}
+
+class _FeedbackSheetState extends State<_FeedbackSheet> {
+  final _controller = TextEditingController();
+  bool _sending = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty) {
+      setState(() => _error = AppStrings.t('feedbackEmpty'));
+      return;
+    }
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+    try {
+      await FeedbackService.send(text);
+      if (mounted) Navigator.pop(context, true);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _sending = false;
+          _error = AppStrings.t('feedbackFailed');
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(20, 8, 20, 20 + MediaQuery.viewInsetsOf(context).bottom),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            AppStrings.t('feedbackTitle'),
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _controller,
+            enabled: !_sending,
+            minLines: 4,
+            maxLines: 6,
+            maxLength: 1000,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: InputDecoration(
+              hintText: AppStrings.t('feedbackHint'),
+              errorText: _error,
+            ),
+          ),
+          const SizedBox(height: 12),
+          FilledButton(
+            onPressed: _sending ? null : _submit,
+            child: _sending
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : Text(AppStrings.t('feedbackSend')),
+          ),
+        ],
       ),
     );
   }
