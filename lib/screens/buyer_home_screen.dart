@@ -938,8 +938,9 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
   Widget _categoryBar() {
     final categories = <String, String>{
       'Zote': '',
-      'Chumba': 'studio',
+      'Chumba': 'chumba',
       'Nyumba': 'nyumba',
+      'Kiwanja': 'kiwanja',
     };
 
     return SizedBox(
@@ -1027,6 +1028,12 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                 else if (entry.key == 'Nyumba')
                   const Icon(
                     Icons.home_rounded,
+                    color: _navy,
+                    size: 15,
+                  )
+                else if (entry.key == 'Kiwanja')
+                  const Icon(
+                    Icons.landscape_rounded,
                     color: _navy,
                     size: 15,
                   ),

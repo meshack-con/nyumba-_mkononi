@@ -3,9 +3,11 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../models/property_type.dart';
 import '../services/api_client.dart';
+import '../services/location_service.dart';
 import '../theme/app_theme.dart';
-import 'location_picker_screen.dart';
+import '../widgets/location_field.dart';
 
 class AddPropertyScreen extends StatefulWidget {
   const AddPropertyScreen({super.key});
@@ -18,8 +20,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
   final _name = TextEditingController();
   final _price = TextEditingController();
   final _description = TextEditingController();
-  final _area = TextEditingController();
-  String _type = 'apartment';
+  String _type = PropertyTypes.chumba;
   String _mode = 'rent';
   bool _wifi = false;
   bool _carParking = false;
@@ -42,7 +43,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
 
   @override
   void dispose() {
-    for (final controller in [_name, _price, _description, _area]) {
+    for (final controller in [_name, _price, _description]) {
       controller.dispose();
     }
     super.dispose();
@@ -76,15 +77,10 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
     setState(() { _document = result.files.single.bytes; _documentName = result.files.single.name; });
   }
 
-  Future<void> _pickLocation() async {
-    final result = await Navigator.push<PickedLocation>(context, MaterialPageRoute(builder: (_) => LocationPickerScreen(initial: _location)));
-    if (result != null) setState(() { _location = result; _area.text = result.label; });
-  }
-
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (!_photosComplete || _document == null || _location == null) {
-      setState(() => _error = 'Ongeza picha 3, hati ya umiliki na eneo kwenye ramani.');
+      setState(() => _error = 'Ongeza picha 3, hati ya umiliki na eneo la nyumba (bonyeza "Weka eneo").');
       return;
     }
     setState(() { _loading = true; _error = null; });
@@ -96,7 +92,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
         type: _type,
         mode: _mode,
         price: int.parse(_price.text.trim()),
-        locationLabel: _area.text.trim(),
+        locationLabel: _location!.label,
         latitude: _location!.point.latitude,
         longitude: _location!.point.longitude,
         hasWifi: _wifi,
@@ -195,7 +191,7 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
               ),
               const SizedBox(height: 22),
               _section('Taarifa za msingi', 'Eleza nyumba yako kwa uwazi'),
-              TextFormField(controller: _name, validator: _required, decoration: const InputDecoration(labelText: 'Jina la nyumba', prefixIcon: Icon(Icons.home_work_outlined))),
+              TextFormField(controller: _name, validator: _required, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Jina la mtaa / kata', hintText: 'Mfano: Sinza, Mikocheni', prefixIcon: Icon(Icons.location_city_outlined))),
               const SizedBox(height: 12),
               Row(children: [
                 Expanded(
@@ -203,10 +199,9 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
                     value: _type,
                     decoration: const InputDecoration(labelText: 'Aina'),
                     items: const [
-                      DropdownMenuItem(value: 'apartment', child: Text('Apartment')),
-                      DropdownMenuItem(value: 'nyumba', child: Text('Nyumba')),
-                      DropdownMenuItem(value: 'studio', child: Text('Studio')),
-                      DropdownMenuItem(value: 'villa', child: Text('Villa')),
+                      DropdownMenuItem(value: PropertyTypes.chumba, child: Text('Chumba')),
+                      DropdownMenuItem(value: PropertyTypes.nyumba, child: Text('Nyumba')),
+                      DropdownMenuItem(value: PropertyTypes.kiwanja, child: Text('Kiwanja')),
                     ],
                     onChanged: (value) => setState(() => _type = value!),
                   ),
@@ -239,18 +234,8 @@ class _AddPropertyScreenState extends State<AddPropertyScreen> {
               SwitchListTile(contentPadding: EdgeInsets.zero, secondary: const Icon(Icons.chair_rounded), title: const Text('Ina samani (furnished)'), value: _furnished, onChanged: (value) => setState(() => _furnished = value)),
               SwitchListTile(contentPadding: EdgeInsets.zero, secondary: const Icon(Icons.pool_rounded), title: const Text('Ina swimming pool'), value: _swimmingPool, onChanged: (value) => setState(() => _swimmingPool = value)),
               const SizedBox(height: 10),
-              _section('Eneo', 'Chagua alama kwenye ramani'),
-              TextFormField(
-                controller: _area,
-                readOnly: true,
-                validator: _required,
-                onTap: _pickLocation,
-                decoration: InputDecoration(
-                  labelText: 'Eneo la nyumba',
-                  prefixIcon: const Icon(Icons.location_on_outlined),
-                  suffixIcon: IconButton(onPressed: _pickLocation, icon: const Icon(Icons.map_outlined)),
-                ),
-              ),
+              _section('Eneo', 'Ruhusu GPS ya simu yako'),
+              LocationField(value: _location, onChanged: (location) => setState(() { _location = location; _error = null; })),
               const SizedBox(height: 22),
               _section('Uthibitisho wa umiliki', _documentName ?? 'Hati inahitajika'),
               OutlinedButton.icon(onPressed: _pickDocument, icon: const Icon(Icons.upload_file_outlined), label: Text(_documentName ?? 'Pakia hati')),

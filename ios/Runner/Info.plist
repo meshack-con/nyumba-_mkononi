@@ -60,7 +60,7 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Nyumba Mkononi inahitaji eneo lako ili kukuonyesha umbali na njia ya kufika kwenye nyumba unayoiangalia.</string>
+	<string>Nyumba Mkononi inahitaji eneo lako ili kukuonyesha umbali na njia ya kufika kwenye nyumba unayoiangalia, na kuweka eneo la nyumba unayotangaza.</string>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

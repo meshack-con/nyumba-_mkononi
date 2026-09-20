@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../models/property.dart';
+import '../models/property_type.dart';
 import '../services/api_client.dart';
+import '../services/location_service.dart';
 import '../theme/app_theme.dart';
-import 'location_picker_screen.dart';
+import '../widgets/location_field.dart';
 
 /// Skrini ya kuhariri tangazo la nyumba ambalo mwenye tangazo (seller)
 /// ameshaliweka kwenye mfumo. Picha na hati ya uthibitisho HAZIBADILISHWI
@@ -22,7 +24,6 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
   late final TextEditingController _name;
   late final TextEditingController _price;
   late final TextEditingController _description;
-  late final TextEditingController _area;
   late String _type;
   late String _mode;
   late bool _wifi;
@@ -44,8 +45,7 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
     _name = TextEditingController(text: p.name);
     _price = TextEditingController(text: '${p.price}');
     _description = TextEditingController(text: p.description);
-    _area = TextEditingController(text: p.locationLabel);
-    _type = p.type;
+    _type = PropertyTypes.normalize(p.type);
     _mode = p.mode;
     _wifi = p.hasWifi;
     _carParking = p.carParking;
@@ -60,15 +60,10 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
 
   @override
   void dispose() {
-    for (final controller in [_name, _price, _description, _area]) {
+    for (final controller in [_name, _price, _description]) {
       controller.dispose();
     }
     super.dispose();
-  }
-
-  Future<void> _pickLocation() async {
-    final result = await Navigator.push<PickedLocation>(context, MaterialPageRoute(builder: (_) => LocationPickerScreen(initial: _location)));
-    if (result != null) setState(() { _location = result; _area.text = result.label; });
   }
 
   Future<void> _submit() async {
@@ -81,7 +76,7 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
         type: _type,
         mode: _mode,
         price: int.parse(_price.text.trim()),
-        locationLabel: _area.text.trim(),
+        locationLabel: _location.label,
         latitude: _location.point.latitude,
         longitude: _location.point.longitude,
         hasWifi: _wifi,
@@ -116,7 +111,7 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
             padding: const EdgeInsets.fromLTRB(20, 8, 20, 36),
             children: [
               _section('Taarifa za msingi', 'Eleza nyumba yako kwa uwazi'),
-              TextFormField(controller: _name, validator: _required, decoration: const InputDecoration(labelText: 'Jina la nyumba', prefixIcon: Icon(Icons.home_work_outlined))),
+              TextFormField(controller: _name, validator: _required, textCapitalization: TextCapitalization.words, decoration: const InputDecoration(labelText: 'Jina la mtaa / kata', hintText: 'Mfano: Sinza, Mikocheni', prefixIcon: Icon(Icons.location_city_outlined))),
               const SizedBox(height: 12),
               Row(children: [
                 Expanded(
@@ -124,10 +119,9 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
                     value: _type,
                     decoration: const InputDecoration(labelText: 'Aina'),
                     items: const [
-                      DropdownMenuItem(value: 'apartment', child: Text('Apartment')),
-                      DropdownMenuItem(value: 'nyumba', child: Text('Nyumba')),
-                      DropdownMenuItem(value: 'studio', child: Text('Studio')),
-                      DropdownMenuItem(value: 'villa', child: Text('Villa')),
+                      DropdownMenuItem(value: PropertyTypes.chumba, child: Text('Chumba')),
+                      DropdownMenuItem(value: PropertyTypes.nyumba, child: Text('Nyumba')),
+                      DropdownMenuItem(value: PropertyTypes.kiwanja, child: Text('Kiwanja')),
                     ],
                     onChanged: (value) => setState(() => _type = value!),
                   ),
@@ -160,18 +154,8 @@ class _EditPropertyScreenState extends State<EditPropertyScreen> {
               SwitchListTile(contentPadding: EdgeInsets.zero, secondary: const Icon(Icons.chair_rounded), title: const Text('Ina samani (furnished)'), value: _furnished, onChanged: (value) => setState(() => _furnished = value)),
               SwitchListTile(contentPadding: EdgeInsets.zero, secondary: const Icon(Icons.pool_rounded), title: const Text('Ina swimming pool'), value: _swimmingPool, onChanged: (value) => setState(() => _swimmingPool = value)),
               const SizedBox(height: 10),
-              _section('Eneo', 'Chagua alama kwenye ramani'),
-              TextFormField(
-                controller: _area,
-                readOnly: true,
-                validator: _required,
-                onTap: _pickLocation,
-                decoration: InputDecoration(
-                  labelText: 'Eneo la nyumba',
-                  prefixIcon: const Icon(Icons.location_on_outlined),
-                  suffixIcon: IconButton(onPressed: _pickLocation, icon: const Icon(Icons.map_outlined)),
-                ),
-              ),
+              _section('Eneo', 'Ruhusu GPS ya simu yako'),
+              LocationField(value: _location, onChanged: (location) => setState(() => _location = location)),
               const SizedBox(height: 14),
               Container(
                 padding: const EdgeInsets.all(14),

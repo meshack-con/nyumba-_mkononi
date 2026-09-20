@@ -7,10 +7,22 @@ class UserRole(str, Enum):
     BUYER = "buyer"
     SELLER = "seller"
 class PropertyType(str, Enum):
-    APARTMENT = "apartment"
+    # Aina mpya zinazotumika sasa: chumba, nyumba, kiwanja.
+    CHUMBA = "chumba"
     NYUMBA = "nyumba"
+    KIWANJA = "kiwanja"
+    # Aina za zamani - zinabaki ili matangazo yaliyopo yasiharibike.
+    # Chumba <- studio; Nyumba <- apartment, villa (angalia LEGACY_TYPE_GROUPS).
+    APARTMENT = "apartment"
     STUDIO = "studio"
     VILLA = "villa"
+
+
+# Kuchuja kwa aina mpya pia kunajumuisha matangazo ya zamani yanayolingana nayo.
+LEGACY_TYPE_GROUPS = {
+    PropertyType.CHUMBA: [PropertyType.CHUMBA, PropertyType.STUDIO],
+    PropertyType.NYUMBA: [PropertyType.NYUMBA, PropertyType.APARTMENT, PropertyType.VILLA],
+}
 class PropertyMode(str, Enum):
     RENT = "rent"
     SALE = "sale"

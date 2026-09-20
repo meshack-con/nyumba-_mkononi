@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import '../models/property.dart';
 import '../models/property_contact.dart';
+import '../models/property_type.dart';
 import '../services/api_client.dart';
 import '../theme/app_theme.dart';
 import 'auth_screen.dart';
@@ -201,7 +202,7 @@ class _PropertyDetailsScreenState extends State<PropertyDetailsScreen> {
             Text(property.mode == 'rent' ? 'Kwa kukodisha' : 'Kwa kuuza', style: const TextStyle(color: AppTheme.muted)),
             const SizedBox(height: 22),
             Wrap(spacing: 8, runSpacing: 8, children: [
-              Chip(label: Text(property.type)),
+              Chip(label: Text(PropertyTypes.label(property.type))),
               Chip(label: Text(property.hasWifi ? 'Wi-Fi ipo' : 'Hakuna Wi-Fi'), avatar: Icon(property.hasWifi ? Icons.wifi : Icons.wifi_off, size: 17)),
             ]),
             const SizedBox(height: 22),

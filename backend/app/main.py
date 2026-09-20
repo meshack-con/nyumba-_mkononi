@@ -15,7 +15,7 @@ import cloudinary.uploader
 from .admin import router as admin_router
 from .auth import create_access_token, get_current_user, hash_password, verify_password
 from .database import Base, engine, get_db, settings
-from .models import Feedback, Favorite, LoginEvent, Message, Notification, Property, PropertyMode, PropertyStatus, PropertyType, User, UserRole
+from .models import LEGACY_TYPE_GROUPS, Feedback, Favorite, LoginEvent, Message, Notification, Property, PropertyMode, PropertyStatus, PropertyType, User, UserRole
 from .schemas import (
     AuthResponse,
     ConversationResponse,
@@ -72,6 +72,21 @@ def create_tables() -> None:
         connection.execute(text(
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_picha_url VARCHAR(500)"
         ))
+    ensure_property_type_values()
+
+
+def ensure_property_type_values() -> None:
+    # Enum ya Postgres `property_type` ilishaundwa na aina za zamani. `create_all`
+    # haiongezi thamani MPYA (chumba, kiwanja) kwenye enum iliyopo, kwa hiyo
+    # tunaziongeza hapa kwa `IF NOT EXISTS` - salama kila app inapoanza.
+    # `ADD VALUE` inafanya kazi vizuri zaidi nje ya transaction, ndiyo maana
+    # tunatumia AUTOCOMMIT. SQLAlchemy inahifadhi JINA la member (CHUMBA),
+    # si thamani yake (chumba).
+    if engine.dialect.name != "postgresql":
+        return
+    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
+        for member in PropertyType:
+            connection.execute(text(f"ALTER TYPE property_type ADD VALUE IF NOT EXISTS '{member.name}'"))
 
 
 def ensure_seller(user: User) -> None:
@@ -251,7 +266,7 @@ def list_properties(
     if max_price is not None:
         query = query.where(Property.price <= max_price)
     if property_type is not None:
-        query = query.where(Property.aina == property_type)
+        query = query.where(Property.aina.in_(LEGACY_TYPE_GROUPS.get(property_type, [property_type])))
     if mode is not None:
         query = query.where(Property.mode == mode)
     if has_wifi is not None:
