@@ -39,6 +39,13 @@ class UserUpdate(BaseModel):
 class FeedbackCreate(BaseModel):
     message: str = Field(min_length=1, max_length=1000)
 
+    @model_validator(mode="after")
+    def message_not_blank(self):
+        self.message = self.message.strip()
+        if not self.message:
+            raise ValueError("Feedback haiwezi kuwa tupu")
+        return self
+
 class AuthResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"

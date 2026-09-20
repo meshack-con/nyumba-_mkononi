@@ -37,6 +37,7 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     properties: Mapped[list["Property"]] = relationship(back_populates="owner")
     favorites: Mapped[list["Favorite"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    feedback: Mapped[list["Feedback"]] = relationship(cascade="all, delete-orphan")
 
 class Feedback(Base):
     __tablename__ = "feedback"

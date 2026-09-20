@@ -200,7 +200,7 @@ def create_feedback(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    feedback = Feedback(user_id=current_user.id, message=payload.message.strip())
+    feedback = Feedback(user_id=current_user.id, message=payload.message)
     db.add(feedback)
     db.commit()
     return {"message": "Maoni yamepokelewa"}

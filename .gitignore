@@ -12,5 +12,6 @@ build/
 # Local backend secrets
 backend/.env
 backend/venv/
+backend/app/__pycache__/
 backend/uploads/
 .vercel

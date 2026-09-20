@@ -40,6 +40,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
     try {
       final user = await ApiClient.instance.getMe();
+      await ThemeController.instance.loadForUser(user.id);
       if (mounted) setState(() => _user = user);
     } catch (_) {
       // Ikiwa imeshindwa kupakia (mfano token imeisha), UI inabaki
@@ -87,14 +88,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
         _ExpandableSection(
           title: s('appearance'),
           expanded: _appearanceExpanded,
-          onTap: () => setState(() => _appearanceExpanded = !_appearanceExpanded),
+          onTap: () {
+            _toggleAppearance();
+          },
           child: const _ThemeSelector(),
         ),
         const SizedBox(height: 8),
         _ExpandableSection(
           title: s('primaryColor'),
           expanded: _primaryColorExpanded,
-          onTap: () => setState(() => _primaryColorExpanded = !_primaryColorExpanded),
+          onTap: () {
+            _togglePrimaryColor();
+          },
           child: const _AccentSelector(),
         ),
         const SizedBox(height: 24),
@@ -151,12 +156,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _signOut() async {
     await ApiClient.instance.clearSession();
+    await ThemeController.instance.loadForUser(null);
     if (mounted) {
       setState(() {
         _signedIn = false;
         _user = null;
       });
     }
+  }
+
+  Future<void> _toggleAppearance() async {
+    if (!_signedIn) {
+      await _openAuth();
+      if (!_signedIn) return;
+    }
+    if (mounted) setState(() => _appearanceExpanded = !_appearanceExpanded);
+  }
+
+  Future<void> _togglePrimaryColor() async {
+    if (!_signedIn) {
+      await _openAuth();
+      if (!_signedIn) return;
+    }
+    if (mounted) setState(() => _primaryColorExpanded = !_primaryColorExpanded);
   }
 
   Future<void> _chooseLanguage() async {

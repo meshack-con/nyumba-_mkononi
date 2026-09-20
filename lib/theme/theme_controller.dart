@@ -15,8 +15,7 @@ class ThemeController extends ChangeNotifier {
   ThemeController._();
   static final ThemeController instance = ThemeController._();
 
-  static const _modeKey = 'theme_mode';
-  static const _accentKey = 'accent_color';
+  int? _userId;
 
   static const List<AccentOption> accents = [
     AccentOption('pink', 'Pinki', Color(0xFF9C2C50), Color(0xFFC24571)),
@@ -37,10 +36,17 @@ class ThemeController extends ChangeNotifier {
   AccentOption get accent => _accent;
 
   Future<void> load() async {
+    await loadForUser(null);
+  }
+
+  Future<void> loadForUser(int? userId) async {
+    _userId = userId;
     try {
       final prefs = await SharedPreferences.getInstance();
-      _mode = prefs.getString(_modeKey) == 'dark' ? ThemeMode.dark : ThemeMode.light;
-      final id = prefs.getString(_accentKey);
+      final modeKey = userId == null ? null : 'theme_mode_user_$userId';
+      final accentKey = userId == null ? null : 'accent_color_user_$userId';
+      _mode = modeKey != null && prefs.getString(modeKey) == 'dark' ? ThemeMode.dark : ThemeMode.light;
+      final id = accentKey == null ? null : prefs.getString(accentKey);
       _accent = accents.firstWhere((a) => a.id == id, orElse: () => accents.first);
     } catch (_) {
       _mode = ThemeMode.light;
@@ -55,7 +61,9 @@ class ThemeController extends ChangeNotifier {
     notifyListeners();
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_modeKey, mode == ThemeMode.dark ? 'dark' : 'light');
+      if (_userId != null) {
+        await prefs.setString('theme_mode_user_${_userId!}', mode == ThemeMode.dark ? 'dark' : 'light');
+      }
     } catch (_) {
       // Chaguo linabaki kwa kipindi hiki hata kama kuhifadhi kumeshindwa.
     }
@@ -68,7 +76,9 @@ class ThemeController extends ChangeNotifier {
     _rebuildWholeApp();
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_accentKey, option.id);
+      if (_userId != null) {
+        await prefs.setString('accent_color_user_${_userId!}', option.id);
+      }
     } catch (_) {
       // Chaguo linabaki kwa kipindi hiki hata kama kuhifadhi kumeshindwa.
     }
