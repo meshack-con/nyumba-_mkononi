@@ -5,7 +5,7 @@ from uuid import uuid4
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
@@ -59,7 +59,17 @@ app.add_middleware(
 
 @app.on_event("startup")
 def create_tables() -> None:
+    # `create_all` inaunda majedwali MAPYA tu (mfano `notifications`) - haiwezi
+    # kuongeza column mpya kwenye jedwali `users` ambalo tayari lipo kwenye
+    # database ya production. Kwa hiyo tunaongeza column hiyo wenyewe hapa,
+    # kwa amri isiyo na madhara ikiwa tayari ipo (IF NOT EXISTS) - inafanya
+    # kazi salama kila mara app inapoanza, bila hatua yoyote ya mkono kwenye
+    # server halisi.
     Base.metadata.create_all(bind=engine)
+    with engine.begin() as connection:
+        connection.execute(text(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS profile_picha_url VARCHAR(500)"
+        ))
 
 
 def ensure_seller(user: User) -> None:
