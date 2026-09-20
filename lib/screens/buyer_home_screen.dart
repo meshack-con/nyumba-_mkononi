@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/property.dart';
+import '../models/user.dart';
 import '../services/api_client.dart';
 import 'auth_screen.dart';
 import 'favorites_screen.dart';
@@ -55,6 +56,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
 
   int _tab = 0;
   int _unreadMessages = 0;
+  AppUser? _currentUser;
 
   static const Color _pink = Color(0xFFD5005B);
   static const Color _pinkDark = Color(0xFFC30053);
@@ -67,6 +69,22 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     super.initState();
     _load();
     _refreshUnreadBadge();
+    _loadCurrentUser();
+  }
+
+  Future<void> _loadCurrentUser() async {
+    final token = await ApiClient.instance.getToken();
+    if (token == null || token.isEmpty) {
+      if (mounted) setState(() => _currentUser = null);
+      return;
+    }
+    try {
+      final user = await ApiClient.instance.getMe();
+      if (mounted) setState(() => _currentUser = user);
+    } catch (_) {
+      // Token isiyo sahihi au tatizo la mtandao - inabaki kuonyesha
+      // hali ya "Mgeni" bila kuvunja skrini.
+    }
   }
 
   Future<void> _refreshUnreadBadge() async {
@@ -246,8 +264,10 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
       _tab = index;
     });
     // Baada ya kuchagua tab (hasa ukitoka kwenye Ujumbe baada ya kusoma),
-    // sasisha alama ya idadi ya ujumbe usiosomwa.
+    // sasisha alama ya idadi ya ujumbe usiosomwa na taarifa za mtumiaji
+    // (mfano baada ya kuingia au kuhariri wasifu).
     _refreshUnreadBadge();
+    _loadCurrentUser();
   }
 
   Widget _navigationRail() {
@@ -627,10 +647,10 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
           ),
         ),
         const SizedBox(width: 10),
-        const Column(
+        Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            const Text(
               'Karibu,',
               style: TextStyle(
                 color: _navy,
@@ -639,10 +659,12 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
                 height: 1,
               ),
             ),
-            SizedBox(height: 3),
+            const SizedBox(height: 3),
             Text(
-              'Mgeni',
-              style: TextStyle(
+              _currentUser?.fullName ?? 'Mgeni',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
                 color: _pinkDark,
                 fontSize: 21,
                 fontWeight: FontWeight.w900,
@@ -656,14 +678,33 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
   }
 
   Widget _loginButton() {
+    if (_currentUser != null) {
+      return InkWell(
+        onTap: () => _selectTab(4),
+        borderRadius: BorderRadius.circular(30),
+        child: CircleAvatar(
+          radius: 21,
+          backgroundColor: _pink,
+          backgroundImage: _currentUser!.profilePichaUrl != null ? NetworkImage(_currentUser!.profilePichaUrl!) : null,
+          child: _currentUser!.profilePichaUrl == null
+              ? Text(
+                  _currentUser!.fullName.isNotEmpty ? _currentUser!.fullName[0].toUpperCase() : '?',
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
+                )
+              : null,
+        ),
+      );
+    }
     return FilledButton.icon(
-      onPressed: () {
-        Navigator.push(
+      onPressed: () async {
+        await Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => const AuthScreen(),
           ),
         );
+        _loadCurrentUser();
+        _refreshUnreadBadge();
       },
       icon: const Icon(
         Icons.person_outline_rounded,

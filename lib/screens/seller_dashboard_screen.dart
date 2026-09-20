@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 import '../models/property.dart';
+import '../models/user.dart';
 import '../services/api_client.dart';
 import '../theme/app_theme.dart';
 import 'add_property_screen.dart';
 import 'auth_screen.dart';
 import 'messages_inbox_screen.dart';
+import 'profile_screen.dart';
 
 class SellerDashboardScreen extends StatefulWidget {
   const SellerDashboardScreen({super.key});
@@ -18,6 +20,7 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
   bool _loading = true;
   bool _checkingAuth = true;
   int _tab = 0;
+  AppUser? _currentUser;
 
   @override
   void initState() {
@@ -39,6 +42,21 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     }
     setState(() => _checkingAuth = false);
     _load();
+    _loadCurrentUser();
+  }
+
+  Future<void> _loadCurrentUser() async {
+    try {
+      final user = await ApiClient.instance.getMe();
+      if (mounted) setState(() => _currentUser = user);
+    } catch (_) {
+      // Haihitaji kuvunja dashibodi ikiwa imeshindikana kupakia wasifu.
+    }
+  }
+
+  Future<void> _openProfile() async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const ProfileScreen()));
+    _loadCurrentUser();
   }
 
   Future<void> _load() async {
@@ -81,7 +99,27 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
       appBar: _tab == 0
           ? AppBar(
               title: const Text('Dashibodi yako', style: TextStyle(fontWeight: FontWeight.w900)),
-              actions: [IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded))],
+              actions: [
+                IconButton(onPressed: _load, icon: const Icon(Icons.refresh_rounded)),
+                Padding(
+                  padding: const EdgeInsets.only(right: 14, left: 4),
+                  child: InkWell(
+                    onTap: _openProfile,
+                    borderRadius: BorderRadius.circular(20),
+                    child: CircleAvatar(
+                      radius: 18,
+                      backgroundColor: AppTheme.primary,
+                      backgroundImage: _currentUser?.profilePichaUrl != null ? NetworkImage(_currentUser!.profilePichaUrl!) : null,
+                      child: _currentUser?.profilePichaUrl == null
+                          ? Text(
+                              _currentUser?.fullName.isNotEmpty == true ? _currentUser!.fullName[0].toUpperCase() : '?',
+                              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 13),
+                            )
+                          : null,
+                    ),
+                  ),
+                ),
+              ],
             )
           : null,
       floatingActionButton: _tab == 0
@@ -110,7 +148,10 @@ class _SellerDashboardScreenState extends State<SellerDashboardScreen> {
     final approved = _properties.where((item) => item.status == 'approved').length;
     final pending = _properties.where((item) => item.status == 'pending').length;
     return RefreshIndicator(onRefresh: _load, child: ListView(padding: const EdgeInsets.fromLTRB(20, 8, 20, 100), children: [
-        Text('Tangazo lako, mwanzo wa safari ya mtu.', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
+        Text(
+          _currentUser != null ? 'Karibu, ${_currentUser!.fullName}' : 'Tangazo lako, mwanzo wa safari ya mtu.',
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
+        ),
         const SizedBox(height: 22),
         Row(children: [_Stat(label: 'Jumla', value: '${_properties.length}', color: AppTheme.primary), const SizedBox(width: 10), _Stat(label: 'Imeidhinishwa', value: '$approved', color: AppTheme.success), const SizedBox(width: 10), _Stat(label: 'Inapitiwa', value: '$pending', color: AppTheme.primaryContainer)]),
         const SizedBox(height: 28),
