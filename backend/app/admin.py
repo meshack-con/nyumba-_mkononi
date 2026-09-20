@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from .auth import ensure_admin
 from .database import get_db
-from .models import LoginEvent, Property, PropertyStatus, User, UserRole
+from .models import LoginEvent, Notification, Property, PropertyStatus, User, UserRole
 from .schemas import AnalyticsPoint, AnalyticsSummary, PropertyResponse
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(ensure_admin)])
@@ -76,6 +76,12 @@ def approve_property(property_id: int, db: Session = Depends(get_db)):
     if property_item.status == PropertyStatus.APPROVED:
         raise HTTPException(status_code=409, detail="Tangazo tayari limeruhusiwa")
     property_item.status = PropertyStatus.APPROVED
+    db.add(Notification(
+        user_id=property_item.owner_id,
+        title="Tangazo lako limeruhusiwa",
+        body=f"Tangazo lako la '{property_item.jina}' limepitishwa na sasa linaonekana kwa umma.",
+        property_id=property_item.id,
+    ))
     db.commit()
     db.refresh(property_item)
     return property_item
@@ -89,6 +95,12 @@ def reject_property(property_id: int, db: Session = Depends(get_db)):
     if property_item.status == PropertyStatus.REJECTED:
         raise HTTPException(status_code=409, detail="Tangazo tayari limekataliwa")
     property_item.status = PropertyStatus.REJECTED
+    db.add(Notification(
+        user_id=property_item.owner_id,
+        title="Tangazo lako halikuruhusiwa",
+        body=f"Tangazo lako la '{property_item.jina}' limekataliwa. Wasiliana na msaada kwa maelezo zaidi.",
+        property_id=property_item.id,
+    ))
     db.commit()
     db.refresh(property_item)
     return property_item

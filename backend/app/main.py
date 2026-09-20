@@ -15,7 +15,7 @@ import cloudinary.uploader
 from .admin import router as admin_router
 from .auth import create_access_token, get_current_user, hash_password, verify_password
 from .database import Base, engine, get_db, settings
-from .models import Favorite, LoginEvent, Message, Property, PropertyMode, PropertyStatus, PropertyType, User, UserRole
+from .models import Favorite, LoginEvent, Message, Notification, Property, PropertyMode, PropertyStatus, PropertyType, User, UserRole
 from .schemas import (
     AuthResponse,
     ConversationResponse,
@@ -23,11 +23,13 @@ from .schemas import (
     LoginRequest,
     MessageCreate,
     MessageResponse,
+    NotificationResponse,
     PropertyResponse,
     PropertyWithOwnerResponse,
     PublicPropertyResponse,
     UserCreate,
     UserResponse,
+    UserUpdate,
 )
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -122,6 +124,12 @@ def register(payload: UserCreate, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=409, detail="Username tayari ipo") from None
     db.refresh(user)
+    db.add(Notification(
+        user_id=user.id,
+        title="Karibu Nyumba Mkononi!",
+        body=f"Habari {user.jina_kamili}, akaunti yako imefunguliwa kikamilifu. Karibu utafute au utangaze nyumba.",
+    ))
+    db.commit()
     return AuthResponse(access_token=create_access_token(user), user=user)
 
 
@@ -133,6 +141,46 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     db.add(LoginEvent(user_id=user.id, role=user.role))
     db.commit()
     return AuthResponse(access_token=create_access_token(user), user=user)
+
+
+# --- Taarifa binafsi za mtumiaji aliyeautheticate (wasifu) --------------
+
+@app.get("/auth/me", response_model=UserResponse)
+def get_me(current_user: User = Depends(get_current_user)):
+    """Taarifa zote binafsi za mtumiaji, kama alivyoziingiza wakati wa
+    usajili, kwa ajili ya sehemu ya 'Taarifa binafsi' kwenye wasifu."""
+    return current_user
+
+
+@app.patch("/auth/me", response_model=UserResponse)
+def update_me(payload: UserUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Mtumiaji anahariri taarifa zake binafsi (jina, simu, email, eneo)."""
+    data = payload.model_dump(exclude_unset=True)
+    if "jina_kamili" in data and data["jina_kamili"] is not None:
+        current_user.jina_kamili = data["jina_kamili"]
+    if "namba_ya_simu" in data and data["namba_ya_simu"] is not None:
+        current_user.namba_ya_simu = data["namba_ya_simu"]
+    if "email" in data:
+        current_user.email = str(data["email"]) if data["email"] else None
+    if "eneo" in data:
+        current_user.eneo = data["eneo"]
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@app.post("/auth/me/photo", response_model=UserResponse)
+async def update_my_photo(
+    photo: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Mtumiaji anapakia/anabadilisha profile picha yake."""
+    photo_url = await save_upload(photo, "profile-pictures")
+    current_user.profile_picha_url = photo_url
+    db.commit()
+    db.refresh(current_user)
+    return current_user
 
 
 # --- Public-facing property endpoints ---------------------------------
@@ -318,8 +366,10 @@ def get_messages(
 # kikiwa na ujumbe wa mwisho na idadi ya usiosomwa. Hii ndiyo "taarifa za
 # kweli" mpangishaji anazoziona kuhusu ujumbe unaomsubiri.
 
-@app.get("/messages/conversations", response_model=list[ConversationResponse])
-def list_conversations(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def _conversation_threads(current_user: User, db: Session) -> list[dict]:
+    """Muhtasari wa mazungumzo ya mtumiaji, kimoja kwa kila (tangazo, mtu
+    mwingine) - kinatumika kwenye inbox ya ujumbe NA kwenye /notifications
+    (kama 'arifa kutoka kwa mmiliki wa nyumba')."""
     query = (
         select(Message)
         .options(joinedload(Message.sender), joinedload(Message.receiver), joinedload(Message.property))
@@ -350,8 +400,12 @@ def list_conversations(current_user: User = Depends(get_current_user), db: Sessi
             thread["last_sender_id"] = message.sender_id
         if message.receiver_id == current_user.id and message.read_at is None:
             thread["unread_count"] += 1
-    ordered = sorted(threads.values(), key=lambda item: item["last_message_at"], reverse=True)
-    return ordered
+    return sorted(threads.values(), key=lambda item: item["last_message_at"], reverse=True)
+
+
+@app.get("/messages/conversations", response_model=list[ConversationResponse])
+def list_conversations(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return _conversation_threads(current_user, db)
 
 
 @app.delete("/messages/{message_id}", status_code=204)
@@ -501,6 +555,76 @@ def remove_favorite(property_id: int, current_user: User = Depends(get_current_u
         raise HTTPException(status_code=404, detail="Favorite haikupatikana")
     db.delete(favorite)
     db.commit()
+
+
+# --- Arifa (notifications) ----------------------------------------------
+# Inaunganisha aina mbili za arifa kwenye orodha moja: (1) arifa za
+# 'platform' (mfano: tangazo limeruhusiwa/limekataliwa, karibu) kutoka
+# kwenye jedwali la Notification, na (2) muhtasari wa ujumbe kutoka kwa
+# mmiliki wa nyumba / mnunuzi (conversations) - hivi ndivyo mtumiaji
+# anavyoona "Arifa" zote kwenye sehemu ya wasifu.
+
+@app.get("/notifications", response_model=list[NotificationResponse])
+def list_notifications(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    items: list[NotificationResponse] = []
+
+    platform_rows = db.scalars(
+        select(Notification)
+        .where(Notification.user_id == current_user.id)
+        .order_by(Notification.created_at.desc())
+    ).all()
+    for row in platform_rows:
+        items.append(NotificationResponse(
+            id=f"platform-{row.id}",
+            type="platform",
+            title=row.title,
+            body=row.body,
+            created_at=row.created_at,
+            read=row.read_at is not None,
+            property_id=row.property_id,
+        ))
+
+    for thread in _conversation_threads(current_user, db):
+        items.append(NotificationResponse(
+            id=f"owner-{thread['property_id']}-{thread['other_user_id']}",
+            type="owner",
+            title=f"Ujumbe kutoka kwa {thread['other_user_name']}",
+            body=thread["last_message"],
+            created_at=thread["last_message_at"],
+            read=thread["unread_count"] == 0,
+            property_id=thread["property_id"],
+            property_name=thread["property_name"],
+            other_user_id=thread["other_user_id"],
+        ))
+
+    items.sort(key=lambda item: item.created_at, reverse=True)
+    return items
+
+
+@app.post("/notifications/{notification_id}/read", response_model=NotificationResponse)
+def mark_notification_read(notification_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if not notification_id.startswith("platform-"):
+        raise HTTPException(status_code=400, detail="Arifa za ujumbe zinasomwa kwa kufungua mazungumzo husika")
+    try:
+        real_id = int(notification_id.split("-", 1)[1])
+    except (IndexError, ValueError):
+        raise HTTPException(status_code=400, detail="ID ya arifa si sahihi") from None
+    row = db.get(Notification, real_id)
+    if row is None or row.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Arifa haikupatikana")
+    if row.read_at is None:
+        row.read_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(row)
+    return NotificationResponse(
+        id=f"platform-{row.id}",
+        type="platform",
+        title=row.title,
+        body=row.body,
+        created_at=row.created_at,
+        read=row.read_at is not None,
+        property_id=row.property_id,
+    )
 
 
 @app.get("/health")

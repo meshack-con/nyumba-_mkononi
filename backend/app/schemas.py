@@ -27,7 +27,14 @@ class UserResponse(BaseModel):
     role: UserRole
     is_admin: bool
     eneo: str | None
+    profile_picha_url: str | None = None
     created_at: datetime
+class UserUpdate(BaseModel):
+    """Taarifa binafsi zinazoruhusiwa kuhaririwa na mtumiaji mwenyewe."""
+    jina_kamili: str | None = Field(default=None, min_length=2, max_length=150)
+    namba_ya_simu: str | None = Field(default=None, min_length=7, max_length=30)
+    email: EmailStr | None = None
+    eneo: str | None = Field(default=None, max_length=150)
 class AuthResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -145,3 +152,16 @@ class ConversationResponse(BaseModel):
     last_message_at: datetime
     last_sender_id: int
     unread_count: int
+class NotificationResponse(BaseModel):
+    """Arifa moja iliyoungalishwa - inaweza kutoka kwa platform yenyewe
+    (type='platform') au kuwa muhtasari wa mazungumzo na mmiliki wa
+    nyumba / mnunuzi (type='owner')."""
+    id: str
+    type: str
+    title: str
+    body: str
+    created_at: datetime
+    read: bool
+    property_id: int | None = None
+    property_name: str | None = None
+    other_user_id: int | None = None
