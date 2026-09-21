@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/conversation.dart';
 import '../models/message.dart';
+import '../models/notification.dart';
 import '../models/property.dart';
 import '../models/property_contact.dart';
 import '../models/user.dart';
@@ -225,6 +226,7 @@ class ApiClient {
     required bool furnished,
     required bool swimmingPool,
     required String description,
+    int? plotSizeSqm,
     required List<Uint8List> photos,
     required List<String> photoNames,
     required Uint8List verificationDoc,
@@ -249,6 +251,7 @@ class ApiClient {
       'furnished': '$furnished',
       'swimming_pool': '$swimmingPool',
       'description': description,
+      if (plotSizeSqm != null) 'plot_size_sqm': '$plotSizeSqm',
     });
     for (var index = 0; index < photos.length; index++) {
       request.files.add(http.MultipartFile.fromBytes('photos', photos[index], filename: photoNames[index]));
@@ -259,4 +262,41 @@ class ApiClient {
   }
 
   String assetUrl(String path) => path.startsWith('http') ? path : '$apiBaseUrl$path';
+
+  Future<AppUser> getMyProfile() async {
+    final response = await http.get(Uri.parse('$apiBaseUrl/users/me'), headers: await _headers(authenticated: true));
+    return AppUser.fromJson(await _decode(response) as Map<String, dynamic>);
+  }
+
+  Future<AppUser> updateMyProfile({String? fullName, String? phone, String? area}) async {
+    final response = await http.put(
+      Uri.parse('$apiBaseUrl/users/me'),
+      headers: {...await _headers(authenticated: true), 'Content-Type': 'application/json'},
+      body: jsonEncode({
+        if (fullName != null) 'jina_kamili': fullName,
+        if (phone != null) 'namba_ya_simu': phone,
+        if (area != null) 'eneo': area,
+      }),
+    );
+    return AppUser.fromJson(await _decode(response) as Map<String, dynamic>);
+  }
+
+  Future<AppUser> uploadProfilePhoto(Uint8List bytes, String filename) async {
+    final request = http.MultipartRequest('POST', Uri.parse('$apiBaseUrl/users/me/photo'));
+    request.headers.addAll(await _headers(authenticated: true));
+    request.files.add(http.MultipartFile.fromBytes('photo', bytes, filename: filename));
+    final response = await http.Response.fromStream(await request.send());
+    return AppUser.fromJson(await _decode(response) as Map<String, dynamic>);
+  }
+
+  Future<List<AppNotification>> getNotifications() async {
+    final response = await http.get(Uri.parse('$apiBaseUrl/notifications'), headers: await _headers(authenticated: true));
+    final data = await _decode(response) as List<dynamic>;
+    return data.map((item) => AppNotification.fromJson(item as Map<String, dynamic>)).toList();
+  }
+
+  Future<void> markNotificationRead(int id) async {
+    final response = await http.put(Uri.parse('$apiBaseUrl/notifications/$id/read'), headers: await _headers(authenticated: true));
+    await _decode(response);
+  }
 }

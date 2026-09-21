@@ -27,7 +27,14 @@ class UserResponse(BaseModel):
     role: UserRole
     is_admin: bool
     eneo: str | None
+    profile_photo_url: str | None = None
     created_at: datetime
+class UserUpdate(BaseModel):
+    """Sehemu za wasifu ambazo mtumiaji anaruhusiwa kuhariri mwenyewe
+    (Taarifa binafsi). Zote ni hiari - tunabadilisha zile tu alizotuma."""
+    jina_kamili: str | None = Field(default=None, min_length=2, max_length=150)
+    namba_ya_simu: str | None = Field(default=None, min_length=7, max_length=30)
+    eneo: str | None = Field(default=None, max_length=150)
 class AuthResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -57,6 +64,7 @@ class PropertyResponse(BaseModel):
     furnished: bool
     swimming_pool: bool
     view_count: int
+    plot_size_sqm: int | None = None
     description: str
     photo_urls: list[str]
     verification_doc_url: str | None
@@ -89,6 +97,7 @@ class PublicPropertyResponse(BaseModel):
     furnished: bool
     swimming_pool: bool
     view_count: int
+    plot_size_sqm: int | None = None
     description: str
     photo_urls: list[str]
     status: PropertyStatus
@@ -145,3 +154,17 @@ class ConversationResponse(BaseModel):
     last_message_at: datetime
     last_sender_id: int
     unread_count: int
+class NotificationItem(BaseModel):
+    """Kipengele kimoja cha 'Arifa' - kinaweza kuwa arifa ya mfumo
+    (kind='system', mfano tangazo limeidhinishwa) au muhtasari wa
+    mazungumzo na mmiliki/mnunuzi (kind='message'). Sehemu ya 'Arifa'
+    kwenye wasifu inaonyesha zote mbili, zikiwa zimepangwa kwa muda."""
+    id: int | None = None
+    kind: str
+    title: str
+    body: str
+    created_at: datetime
+    is_read: bool
+    property_id: int | None = None
+    other_user_id: int | None = None
+    other_user_name: str | None = None

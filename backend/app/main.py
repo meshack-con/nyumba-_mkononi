@@ -5,7 +5,7 @@ from uuid import uuid4
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, func, inspect, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
@@ -15,7 +15,7 @@ import cloudinary.uploader
 from .admin import router as admin_router
 from .auth import create_access_token, get_current_user, hash_password, verify_password
 from .database import Base, engine, get_db, settings
-from .models import Favorite, LoginEvent, Message, Property, PropertyMode, PropertyStatus, PropertyType, User, UserRole
+from .models import Favorite, LoginEvent, Message, Notification, Property, PropertyMode, PropertyStatus, PropertyType, User, UserRole
 from .schemas import (
     AuthResponse,
     ConversationResponse,
@@ -23,11 +23,13 @@ from .schemas import (
     LoginRequest,
     MessageCreate,
     MessageResponse,
+    NotificationItem,
     PropertyResponse,
     PropertyWithOwnerResponse,
     PublicPropertyResponse,
     UserCreate,
     UserResponse,
+    UserUpdate,
 )
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -58,6 +60,27 @@ app.add_middleware(
 @app.on_event("startup")
 def create_tables() -> None:
     Base.metadata.create_all(bind=engine)
+    _ensure_new_columns()
+
+
+def _ensure_new_columns() -> None:
+    """create_all() haiongezi columns mpya kwenye tables zilizokuwepo tayari
+    (mfano production Postgres) - inaunda tables mpya tu. Kwa hiyo columns
+    tulizoongeza baadaye (kama profile_photo_url) hazitaonekana kwenye DB
+    ya zamani mpaka tuzi-ALTER wenyewe. Hii ni 'migration' nyepesi ya
+    kutosha kwa mradi huu (bila Alembic)."""
+    inspector = inspect(engine)
+    if "users" not in inspector.get_table_names():
+        return
+    existing_columns = {column["name"] for column in inspector.get_columns("users")}
+    if "profile_photo_url" not in existing_columns:
+        with engine.begin() as connection:
+            connection.exec_driver_sql("ALTER TABLE users ADD COLUMN profile_photo_url VARCHAR(500)")
+    if "properties" in inspector.get_table_names():
+        existing_property_columns = {column["name"] for column in inspector.get_columns("properties")}
+        if "plot_size_sqm" not in existing_property_columns:
+            with engine.begin() as connection:
+                connection.exec_driver_sql("ALTER TABLE properties ADD COLUMN plot_size_sqm INTEGER")
 
 
 def ensure_seller(user: User) -> None:
@@ -122,6 +145,14 @@ def register(payload: UserCreate, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(status_code=409, detail="Username tayari ipo") from None
     db.refresh(user)
+    db.add(
+        Notification(
+            user_id=user.id,
+            title="Karibu Nyumba Mkononi!",
+            body="Akaunti yako imetengenezwa. Anza kutafuta au kuweka nyumba yako sasa.",
+        )
+    )
+    db.commit()
     return AuthResponse(access_token=create_access_token(user), user=user)
 
 
@@ -133,6 +164,102 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     db.add(LoginEvent(user_id=user.id, role=user.role))
     db.commit()
     return AuthResponse(access_token=create_access_token(user), user=user)
+
+
+# --- Wasifu wa mtumiaji (taarifa binafsi + profile picha) ----------------
+
+@app.get("/users/me", response_model=UserResponse)
+def get_my_profile(current_user: User = Depends(get_current_user)):
+    return current_user
+
+
+@app.put("/users/me", response_model=UserResponse)
+def update_my_profile(
+    payload: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if payload.jina_kamili is not None:
+        current_user.jina_kamili = payload.jina_kamili
+    if payload.namba_ya_simu is not None:
+        current_user.namba_ya_simu = payload.namba_ya_simu
+    if payload.eneo is not None:
+        current_user.eneo = payload.eneo
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@app.post("/users/me/photo", response_model=UserResponse)
+async def upload_profile_photo(
+    photo: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    current_user.profile_photo_url = await save_upload(photo, "profile_photos")
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+# --- Arifa (system notifications + muhtasari wa ujumbe) ------------------
+# 'Arifa' kwenye wasifu inaonyesha vitu viwili vilivyounganishwa na
+# vimepangwa kwa muda: (1) arifa za mfumo wenyewe - Notification table
+# (mfano karibu, tangazo limeidhinishwa/limekataliwa), na (2) muhtasari wa
+# mazungumzo yaliyopo (ujumbe kutoka kwa mmiliki wa nyumba/mnunuzi).
+
+@app.get("/notifications", response_model=list[NotificationItem])
+def list_notifications(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    items: list[NotificationItem] = []
+
+    system_query = (
+        select(Notification)
+        .where(Notification.user_id == current_user.id)
+        .order_by(Notification.created_at.desc())
+        .limit(100)
+    )
+    for notification in db.scalars(system_query).all():
+        items.append(
+            NotificationItem(
+                id=notification.id,
+                kind="system",
+                title=notification.title,
+                body=notification.body,
+                created_at=notification.created_at,
+                is_read=notification.read_at is not None,
+            )
+        )
+
+    for thread in list_conversations(current_user=current_user, db=db):
+        items.append(
+            NotificationItem(
+                kind="message",
+                title=f"Ujumbe kutoka {thread['other_user_name']}",
+                body=thread["last_message"],
+                created_at=thread["last_message_at"],
+                is_read=thread["unread_count"] == 0,
+                property_id=thread["property_id"],
+                other_user_id=thread["other_user_id"],
+                other_user_name=thread["other_user_name"],
+            )
+        )
+
+    items.sort(key=lambda item: item.created_at, reverse=True)
+    return items
+
+
+@app.put("/notifications/{notification_id}/read", status_code=204)
+def mark_notification_read(
+    notification_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    notification = db.get(Notification, notification_id)
+    if notification is None or notification.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Arifa haikupatikani")
+    if notification.read_at is None:
+        notification.read_at = datetime.now(timezone.utc)
+        db.commit()
 
 
 # --- Public-facing property endpoints ---------------------------------
@@ -387,6 +514,7 @@ async def create_property(
     furnished: bool = Form(False),
     swimming_pool: bool = Form(False),
     description: str = Form(...),
+    plot_size_sqm: int | None = Form(None, ge=1),
     photos: list[UploadFile] = File(...),
     verification_doc: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
@@ -415,6 +543,7 @@ async def create_property(
         furnished=furnished,
         swimming_pool=swimming_pool,
         description=description,
+        plot_size_sqm=plot_size_sqm,
         photo_urls=photo_urls,
         verification_doc_url=verification_doc_url,
         status=PropertyStatus.PENDING,

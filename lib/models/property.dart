@@ -26,6 +26,7 @@ class Property {
     this.expiresAt,
     this.favoritesCount = 0,
     this.unreadMessagesCount = 0,
+    this.plotSizeSqm,
   });
   final int id;
   final int ownerId;
@@ -53,6 +54,7 @@ class Property {
   final DateTime? expiresAt;
   final int favoritesCount;
   final int unreadMessagesCount;
+  final int? plotSizeSqm;
   factory Property.fromJson(Map<String, dynamic> json) => Property(
         id: json['id'] as int,
         ownerId: json['owner_id'] as int,
@@ -84,6 +86,7 @@ class Property {
             : DateTime.tryParse(json['expires_at'] as String),
         favoritesCount: json['favorites_count'] as int? ?? 0,
         unreadMessagesCount: json['unread_messages_count'] as int? ?? 0,
+        plotSizeSqm: json['plot_size_sqm'] as int?,
       );
   String get formattedPrice => 'TZS ${price.toString().replaceAllMapped(
       RegExp(r'(?<!^)(?=(\d{3})+$)'),

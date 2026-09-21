@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../models/property.dart';
+import '../models/user.dart';
 import '../services/api_client.dart';
 import 'auth_screen.dart';
 import 'favorites_screen.dart';
@@ -55,6 +56,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
 
   int _tab = 0;
   int _unreadMessages = 0;
+  AppUser? _user;
 
   static const Color _pink = Color(0xFFD5005B);
   static const Color _pinkDark = Color(0xFFC30053);
@@ -67,6 +69,21 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
     super.initState();
     _load();
     _refreshUnreadBadge();
+    _loadUser();
+  }
+
+  Future<void> _loadUser() async {
+    final token = await ApiClient.instance.getToken();
+    if (token == null || token.isEmpty) {
+      if (mounted) setState(() => _user = null);
+      return;
+    }
+    try {
+      final user = await ApiClient.instance.getMyProfile();
+      if (mounted) setState(() => _user = user);
+    } catch (_) {
+      // Token limekwisha muda au tatizo la mtandao - subiri jaribio linalofuata.
+    }
   }
 
   Future<void> _refreshUnreadBadge() async {
@@ -896,6 +913,7 @@ class _BuyerHomeScreenState extends State<BuyerHomeScreen> {
       'Zote': '',
       'Chumba': 'studio',
       'Nyumba': 'nyumba',
+      'Kiwanja': 'kiwanja',
     };
 
     return SizedBox(

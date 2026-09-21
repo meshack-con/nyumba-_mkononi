@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../services/api_client.dart';
 import '../theme/app_theme.dart';
 import 'auth_screen.dart';
+import 'notifications_screen.dart';
+import 'personal_info_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -13,6 +15,7 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   bool _signedIn = false;
+  AppUser? _user;
 
   @override
   void initState() {
@@ -22,25 +25,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _loadSession() async {
     final token = await ApiClient.instance.getToken();
-    if (mounted) setState(() => _signedIn = token?.isNotEmpty == true);
+    final signedIn = token?.isNotEmpty == true;
+    if (mounted) setState(() => _signedIn = signedIn);
+    if (!signedIn) return;
+    try {
+      final user = await ApiClient.instance.getMyProfile();
+      if (mounted) setState(() => _user = user);
+    } catch (_) {
+      // Token inaweza kuwa imeisha muda - _openAuth itashughulikia hilo.
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final displayName = _user?.fullName ?? (_signedIn ? 'Mwanachama wa Nyumba Mkononi' : 'Mgeni');
+    final photoUrl = _user?.profilePhotoUrl;
     return ListView(
       padding: EdgeInsets.fromLTRB(20, MediaQuery.paddingOf(context).top + 28, 20, 32),
       children: [
-        Center(child: CircleAvatar(radius: 58, backgroundColor: AppTheme.primary, child: Text(_signedIn ? 'NM' : 'MK', style: const TextStyle(color: Colors.white, fontSize: 30)))),
+        Center(
+          child: CircleAvatar(
+            radius: 58,
+            backgroundColor: AppTheme.primary,
+            backgroundImage: photoUrl != null ? NetworkImage(ApiClient.instance.assetUrl(photoUrl)) : null,
+            child: photoUrl == null
+                ? Text(
+                    _signedIn && displayName.isNotEmpty ? displayName[0].toUpperCase() : 'MK',
+                    style: const TextStyle(color: Colors.white, fontSize: 30),
+                  )
+                : null,
+          ),
+        ),
         const SizedBox(height: 18),
-        Center(child: Text(_signedIn ? 'Mwanachama wa Nyumba Mkononi' : 'Mgeni', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900))),
+        Center(child: Text(displayName, textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900))),
         const SizedBox(height: 8),
         Center(child: Text(_signedIn ? 'Akaunti yako iko tayari' : 'Ingia ili kuhifadhi nyumba na kuwasiliana', textAlign: TextAlign.center, style: const TextStyle(color: AppTheme.success))),
         const SizedBox(height: 32),
         const _SectionLabel('AKAUNTI'),
-        _ProfileTile(icon: Icons.person_outline_rounded, title: 'Taarifa binafsi', onTap: _openAuth),
-        _ProfileTile(icon: Icons.notifications_none_rounded, title: 'Arifa', onTap: () => _showMessage('Arifa zako zitaonekana hapa.')),
+        _ProfileTile(icon: Icons.person_outline_rounded, title: 'Taarifa binafsi', onTap: _openPersonalInfo),
+        _ProfileTile(icon: Icons.notifications_none_rounded, title: 'Arifa', onTap: _openNotifications),
         _ProfileTile(icon: Icons.account_balance_wallet_outlined, title: 'Toa pesa', onTap: () => _showMessage('Malipo yataonekana hapa.')),
-        _ProfileTile(icon: Icons.verified_user_outlined, title: 'Usajili wangu', onTap: () => _showMessage('Uthibitisho wa akaunti yako.')),
         _ProfileTile(icon: Icons.language_rounded, title: 'Lugha', onTap: () => _showMessage('Kiswahili')),
         const SizedBox(height: 24),
         const _SectionLabel('MSAADA'),
@@ -51,14 +75,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Future<void> _openPersonalInfo() async {
+    if (!_signedIn) {
+      await _openAuth();
+      if (!_signedIn) return;
+    }
+    if (!mounted) return;
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const PersonalInfoScreen()));
+    _loadSession();
+  }
+
+  Future<void> _openNotifications() async {
+    if (!_signedIn) {
+      await _openAuth();
+      if (!_signedIn) return;
+    }
+    if (!mounted) return;
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationsScreen()));
+  }
+
   Future<void> _openAuth() async {
     await Navigator.push(context, MaterialPageRoute(builder: (_) => const AuthScreen()));
-    _loadSession();
+    await _loadSession();
   }
 
   Future<void> _signOut() async {
     await ApiClient.instance.clearSession();
-    if (mounted) setState(() => _signedIn = false);
+    if (mounted) setState(() {
+      _signedIn = false;
+      _user = null;
+    });
   }
 
   void _showMessage(String message) {

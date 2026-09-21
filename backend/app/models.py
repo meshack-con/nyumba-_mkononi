@@ -11,6 +11,7 @@ class PropertyType(str, Enum):
     NYUMBA = "nyumba"
     STUDIO = "studio"
     VILLA = "villa"
+    KIWANJA = "kiwanja"
 class PropertyMode(str, Enum):
     RENT = "rent"
     SALE = "sale"
@@ -30,6 +31,7 @@ class User(Base):
     role: Mapped[UserRole] = mapped_column(SqlEnum(UserRole, name="user_role"))
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     eneo: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    profile_photo_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     properties: Mapped[list["Property"]] = relationship(back_populates="owner")
     favorites: Mapped[list["Favorite"]] = relationship(back_populates="user", cascade="all, delete-orphan")
@@ -53,6 +55,7 @@ class Property(Base):
     furnished: Mapped[bool] = mapped_column(Boolean, default=False)
     swimming_pool: Mapped[bool] = mapped_column(Boolean, default=False)
     view_count: Mapped[int] = mapped_column(Integer, default=0)
+    plot_size_sqm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     description: Mapped[str] = mapped_column(Text)
     photo_urls: Mapped[list[str]] = mapped_column(JSON)
     verification_doc_url: Mapped[str] = mapped_column(String(500))
@@ -89,3 +92,15 @@ class Message(Base):
     property: Mapped["Property"] = relationship(back_populates="messages")
     sender: Mapped["User"] = relationship(foreign_keys=[sender_id])
     receiver: Mapped["User"] = relationship(foreign_keys=[receiver_id])
+class Notification(Base):
+    """Arifa za mfumo (siyo ujumbe wa mtu binafsi) - mfano: 'Karibu Nyumba
+    Mkononi', au 'Tangazo lako limeidhinishwa/limekataliwa'. Hizi ndizo
+    arifa 'kutoka kwa platform yenyewe' zinazoonekana kwenye Arifa za
+    mtumiaji, tofauti na ujumbe wa mmiliki wa nyumba (Message)."""
+    __tablename__ = "notifications"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
